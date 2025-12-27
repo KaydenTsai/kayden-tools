@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Redirecting...</title>
+</head>
+<body>
+  <p>Redirecting...</p>
+  <script>
+    // Redirect to hash router with query params preserved
+    var hash = '#/auth/callback' + window.location.search;
+    window.location.replace(window.location.origin + '/' + hash);
+  </script>
+</body>
+</html>
