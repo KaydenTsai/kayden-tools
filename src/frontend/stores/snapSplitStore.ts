@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Bill, Expense, ExpenseItem } from "@/types/snap-split";
+import type { Bill, Expense, ExpenseItem, SyncStatus } from "@/types/snap-split";
 
 const generateId = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
@@ -13,17 +13,20 @@ const createDefaultBill = (name: string): Bill => ({
     settledTransfers: [],
     createdAt: now(),
     updatedAt: now(),
+    syncStatus: 'local',
 });
 
 const updateCurrentBill = (
     state: SnapSplitState,
     updater: (bill: Bill) => Partial<Bill>
 ): { bills: Bill[] } => ({
-    bills: state.bills.map(bill =>
-        bill.id === state.currentBillId
-            ? { ...bill, ...updater(bill), updatedAt: now() }
-            : bill
-    ),
+    bills: state.bills.map(bill => {
+        if (bill.id !== state.currentBillId) return bill;
+        const updates = updater(bill);
+        const newSyncStatus = bill.syncStatus === 'synced' ? 'modified' : bill.syncStatus;
+
+        return { ...bill, ...updates, updatedAt: now(), syncStatus: newSyncStatus };
+    }),
 });
 
 export interface SnapSplitState {
@@ -55,11 +58,24 @@ export interface SnapSplitState {
     // Settlement actions
     toggleSettlement: (fromId: string, toId: string) => void;
     clearAllSettlements: () => void;
+
+    // Sync actions
+    setBillSyncStatus: (billId: string, status: SyncStatus, error?: string) => void;
+    setBillRemoteId: (billId: string, remoteId: string, shareCode?: string) => void;
+    applyIdMappings: (billId: string, mappings: IdMappings) => void;
+    markBillAsSynced: (billId: string) => void;
+    getUnsyncedBills: () => Bill[];
+}
+
+export interface IdMappings {
+    members: Record<string, string>;
+    expenses: Record<string, string>;
+    expenseItems: Record<string, string>;
 }
 
 export const useSnapSplitStore = create<SnapSplitState>()(
     persist(
-        (set) => ({
+        (set, get) => ({
             bills: [],
             currentBillId: null,
 
@@ -194,6 +210,58 @@ export const useSnapSplitStore = create<SnapSplitState>()(
             clearAllSettlements: () => set(state =>
                 updateCurrentBill(state, () => ({ settledTransfers: [] }))
             ),
+
+            setBillSyncStatus: (billId, status, error) => set(state => ({
+                bills: state.bills.map(bill =>
+                    bill.id === billId
+                        ? { ...bill, syncStatus: status, syncError: error }
+                        : bill
+                ),
+            })),
+
+            setBillRemoteId: (billId, remoteId, shareCode) => set(state => ({
+                bills: state.bills.map(bill =>
+                    bill.id === billId
+                        ? { ...bill, remoteId, shareCode, lastSyncedAt: now() }
+                        : bill
+                ),
+            })),
+
+            applyIdMappings: (billId, mappings) => set(state => ({
+                bills: state.bills.map(bill => {
+                    if (bill.id !== billId) return bill;
+
+                    return {
+                        ...bill,
+                        members: bill.members.map(m => ({
+                            ...m,
+                            remoteId: mappings.members[m.id] ?? m.remoteId,
+                        })),
+                        expenses: bill.expenses.map(e => ({
+                            ...e,
+                            remoteId: mappings.expenses[e.id] ?? e.remoteId,
+                            items: e.items.map(item => ({
+                                ...item,
+                                remoteId: mappings.expenseItems[item.id] ?? item.remoteId,
+                            })),
+                        })),
+                    };
+                }),
+            })),
+
+            markBillAsSynced: (billId) => set(state => ({
+                bills: state.bills.map(bill =>
+                    bill.id === billId
+                        ? { ...bill, syncStatus: 'synced' as SyncStatus, lastSyncedAt: now(), syncError: undefined }
+                        : bill
+                ),
+            })),
+
+            getUnsyncedBills: () => {
+                return get().bills.filter(
+                    bill => bill.syncStatus === 'local' || bill.syncStatus === 'modified'
+                );
+            },
         }),
         { name: 'kayden-tools-snap-split' }
     )

@@ -1,9 +1,45 @@
 import axios from 'axios';
-import type { AxiosError, AxiosRequestConfig } from 'axios';
+import type { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5063';
+const AUTH_STORAGE_KEY = 'kayden-tools-auth';
 
-export const axiosInstance = axios.create({
+// Helper to get auth state from localStorage (avoiding circular dependency with store)
+function getAuthState() {
+  try {
+    const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return parsed.state || {};
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return {};
+}
+
+// Helper to update auth state in localStorage
+function updateAuthState(updates: Record<string, unknown>) {
+  try {
+    const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+    const current = stored ? JSON.parse(stored) : { state: {} };
+    current.state = { ...current.state, ...updates };
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(current));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+// Helper to clear auth state
+function clearAuthState() {
+  try {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+const instance = axios.create({
   baseURL: BASE_URL,
   headers: {
     'Content-Type': 'application/json',
@@ -11,19 +47,20 @@ export const axiosInstance = axios.create({
 });
 
 // Request interceptor - add auth token
-axiosInstance.interceptors.request.use(
+instance.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    const { accessToken } = getAuthState();
+    if (accessToken) {
+      config.headers.Authorization = `Bearer ${accessToken}`;
     }
+
     return config;
   },
   (error) => Promise.reject(error)
 );
 
 // Response interceptor - handle token refresh
-axiosInstance.interceptors.response.use(
+instance.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
@@ -31,27 +68,32 @@ axiosInstance.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
-      const refreshToken = localStorage.getItem('refreshToken');
+      const { refreshToken } = getAuthState();
       if (refreshToken) {
         try {
-          const response = await axios.post(`${BASE_URL}/api/auth/refresh`, {
+          const response = await axios.post(`${BASE_URL}/api/Auth/refresh`, {
             refreshToken,
           });
 
-          const { accessToken, refreshToken: newRefreshToken } = response.data.data;
-          localStorage.setItem('accessToken', accessToken);
-          localStorage.setItem('refreshToken', newRefreshToken);
+          if (response.data?.success && response.data?.data) {
+            const { accessToken, refreshToken: newRefreshToken, expiresAt, user } = response.data.data;
 
-          if (originalRequest.headers) {
-            originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+            updateAuthState({
+              accessToken,
+              refreshToken: newRefreshToken,
+              expiresAt,
+              user,
+              isAuthenticated: true,
+            });
+
+            if (originalRequest.headers) {
+              originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+            }
+
+            return instance(originalRequest);
           }
-
-          return axiosInstance(originalRequest);
         } catch {
-          // Refresh failed, clear tokens and redirect to login
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
-          window.location.href = '/login';
+          clearAuthState();
         }
       }
     }
@@ -60,7 +102,11 @@ axiosInstance.interceptors.response.use(
   }
 );
 
-// Custom instance for orval
-export default <T>(config: AxiosRequestConfig): Promise<T> => {
-  return axiosInstance(config).then((response) => response.data);
+/**
+ * Orval mutator function
+ */
+export const axiosInstance = <T>(config: AxiosRequestConfig): Promise<T> => {
+  return instance(config).then((response: AxiosResponse<T>) => response.data);
 };
+
+export { instance };

@@ -3,8 +3,8 @@ import { defineConfig } from 'orval';
 export default defineConfig({
   api: {
     input: {
-      // Use live endpoint when backend is running, or static file
-      target: process.env.SWAGGER_URL || 'http://localhost:5000/swagger/v1/swagger.json',
+      target: process.env.SWAGGER_URL || 'http://localhost:5063/swagger/v1/swagger.json',
+      validation: false,
     },
     output: {
       mode: 'tags-split',

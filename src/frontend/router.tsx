@@ -7,6 +7,8 @@ import { JwtDecoderPage } from '@/pages/tools/jwt-decoder/JwtDecoderPage';
 import { TimestampPage } from '@/pages/tools/timestamp/TimestampPage';
 import { UuidGeneratorPage } from '@/pages/tools/uuid-generator/UuidGeneratorPage';
 import { SnapSplitPage } from '@/pages/tools/snap-split/SnapSplitPage';
+import { ShareCodePage } from '@/pages/tools/snap-split/ShareCodePage';
+import { AuthCallbackPage } from '@/pages/auth/AuthCallbackPage';
 
 export const router = createHashRouter([
     {
@@ -40,7 +42,15 @@ export const router = createHashRouter([
             {
                 path: 'tools/snapsplit',
                 element: <SnapSplitPage/>
-            }
+            },
+            {
+                path: 'snap-split/share/:shareCode',
+                element: <ShareCodePage/>
+            },
         ],
+    },
+    {
+        path: '/auth/callback',
+        element: <AuthCallbackPage/>,
     },
 ]);
