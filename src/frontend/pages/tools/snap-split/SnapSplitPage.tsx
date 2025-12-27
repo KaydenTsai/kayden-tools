@@ -6,12 +6,14 @@ import { Save as SaveIcon } from "@mui/icons-material";
 import type { Bill } from "@/types/snap-split";
 import { toolsById } from "@/utils/tools";
 import { useCurrentBill, useSnapSplitStore } from "@/stores/snapSplitStore";
+import { useAuthStore } from "@/stores/authStore";
 import { clearShareHash, decodeBillFromUrl } from "@/utils/shareUrl";
 import { ToolPageLayout } from "@/components/ui/ToolPageLayout";
 
 export function SnapSplitPage() {
     const tool = toolsById['snapsplit'];
     const { selectBill, importBill } = useSnapSplitStore();
+    const { isAuthenticated } = useAuthStore();
     const currentBill = useCurrentBill();
     const [previewBill, setPreviewBill] = useState<Bill | null>(null);
 
@@ -72,6 +74,7 @@ export function SnapSplitPage() {
                     bill={displayBill}
                     onBack={handleBack}
                     isReadOnly={!!previewBill}
+                    isAuthenticated={isAuthenticated}
                 />
             ) : (
                 <BillListView />

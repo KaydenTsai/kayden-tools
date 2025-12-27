@@ -58,4 +58,12 @@ public interface IBillService
     /// <param name="id">帳單 ID</param>
     /// <param name="ct">取消令牌</param>
     Task<Result<string>> GenerateShareCodeAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>
+    /// 同步帳單（含成員、費用完整同步）
+    /// </summary>
+    /// <param name="dto">同步請求資料</param>
+    /// <param name="ownerId">擁有者 ID</param>
+    /// <param name="ct">取消令牌</param>
+    Task<Result<SyncBillResponseDto>> SyncBillAsync(SyncBillRequestDto dto, Guid? ownerId, CancellationToken ct = default);
 }

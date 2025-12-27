@@ -18,6 +18,9 @@ public static class ServiceCollectionExtensions
 
         // SnapSplit Services
         services.AddScoped<IBillService, BillService>();
+        services.AddScoped<IMemberService, MemberService>();
+        services.AddScoped<IExpenseService, ExpenseService>();
+        services.AddScoped<ISettlementService, SettlementService>();
 
         // UrlShortener Services
         services.AddScoped<IShortUrlService, ShortUrlService>();

@@ -1,5 +1,6 @@
 using Kayden.Commons.Common;
 using KaydenTools.Core.Common;
+using KaydenTools.Core.Interfaces;
 using KaydenTools.Models.SnapSplit.Dtos;
 using KaydenTools.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
@@ -15,10 +16,12 @@ namespace KaydenTools.Api.Controllers;
 public class BillsController : ControllerBase
 {
     private readonly IBillService _billService;
+    private readonly ICurrentUserService _currentUserService;
 
-    public BillsController(IBillService billService)
+    public BillsController(IBillService billService, ICurrentUserService currentUserService)
     {
         _billService = billService;
+        _currentUserService = currentUserService;
     }
 
     /// <summary>
@@ -72,10 +75,7 @@ public class BillsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateBillDto dto, CancellationToken ct)
     {
-        // TODO: Get owner ID from authenticated user
-        Guid? ownerId = null;
-
-        var result = await _billService.CreateAsync(dto, ownerId, ct);
+        var result = await _billService.CreateAsync(dto, _currentUserService.UserId, ct);
         if (result.IsFailure)
         {
             return BadRequest(ApiResponse.Fail(result.Error.Code, result.Error.Message));
@@ -145,5 +145,31 @@ public class BillsController : ControllerBase
         }
 
         return Ok(ApiResponse.Ok(new { shareCode = result.Value }));
+    }
+
+    /// <summary>
+    /// 同步帳單（含成員、費用完整同步）
+    /// </summary>
+    /// <param name="dto">同步請求資料</param>
+    /// <param name="ct">取消令牌</param>
+    /// <returns>同步結果（含 ID 映射）</returns>
+    [HttpPost("sync")]
+    [ProducesResponseType(typeof(ApiResponse<SyncBillResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Sync([FromBody] SyncBillRequestDto dto, CancellationToken ct)
+    {
+        var result = await _billService.SyncBillAsync(dto, _currentUserService.UserId, ct);
+        if (result.IsFailure)
+        {
+            if (result.Error.Code == ErrorCodes.BillNotFound)
+            {
+                return NotFound(ApiResponse.Fail(result.Error.Code, result.Error.Message));
+            }
+
+            return BadRequest(ApiResponse.Fail(result.Error.Code, result.Error.Message));
+        }
+
+        return Ok(ApiResponse<SyncBillResponseDto>.Ok(result.Value));
     }
 }

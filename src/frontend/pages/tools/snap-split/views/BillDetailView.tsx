@@ -6,11 +6,9 @@ import {
     Dialog,
     DialogActions,
     DialogContent,
-    DialogContentText,
     DialogTitle,
     IconButton,
     Paper,
-    Snackbar,
     Stack,
     Tab,
     Tabs,
@@ -33,9 +31,10 @@ import { ExpenseList } from "../components/ExpenseList";
 import { SettlementPanel } from "../components/SettlementPanel";
 import { VerificationPanel } from "../components/VerificationPanel";
 import { MemberDialog } from "../components/MemberDialog";
+import { ShareDialog } from "@/components/dialogs/ShareDialog";
+import { SyncStatusIcon } from "@/components/ui/SyncStatusIndicator";
 import { useSnapSplitStore } from "@/stores/snapSplitStore";
 import type { Bill } from "@/types/snap-split";
-import { encodeBillToUrl } from "@/utils/shareUrl";
 import { formatAmount, getExpenseTotal } from "@/utils/settlement";
 import { SlideTransition } from "@/components/ui/SlideTransition";
 
@@ -43,18 +42,17 @@ interface BillDetailViewProps {
     bill: Bill;
     onBack: () => void;
     isReadOnly?: boolean;
+    isAuthenticated?: boolean;
 }
 
-export function BillDetailView({ bill, onBack, isReadOnly = false }: BillDetailViewProps) {
+export function BillDetailView({ bill, onBack, isReadOnly = false, isAuthenticated = false }: BillDetailViewProps) {
     const { updateBillName } = useSnapSplitStore();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
     const [tabIndex, setTabIndex] = useState(isReadOnly ? 2 : 0);
-    const [snackbarOpen, setSnackbarOpen] = useState(false);
-    const [longUrlDialogOpen, setLongUrlDialogOpen] = useState(false);
-    const [pendingShareUrl, setPendingShareUrl] = useState('');
     const [memberDialogOpen, setMemberDialogOpen] = useState(false);
+    const [shareDialogOpen, setShareDialogOpen] = useState(false);
     const [itemizedExpenseOpen, setItemizedExpenseOpen] = useState(false);
     const [editingExpenseId, setEditingExpenseId] = useState<string | undefined>(undefined);
     const [editNameOpen, setEditNameOpen] = useState(false);
@@ -75,40 +73,6 @@ export function BillDetailView({ bill, onBack, isReadOnly = false }: BillDetailV
     const handleCloseItemizedExpense = () => {
         setItemizedExpenseOpen(false);
         setEditingExpenseId(undefined);
-    };
-
-    const handleShare = async () => {
-        const { url, isLong } = encodeBillToUrl(bill);
-
-        if (isLong) {
-            setPendingShareUrl(url);
-            setLongUrlDialogOpen(true);
-            return;
-        }
-
-        await performShare(url);
-    };
-
-    const performShare = async (url: string) => {
-        if (navigator.share) {
-            try {
-                await navigator.share({
-                    title: `帳單分享: ${bill.name}`,
-                    text: `這是「${bill.name}」的結算明細`,
-                    url,
-                });
-            } catch {
-                // User cancelled or share failed
-            }
-        } else {
-            await navigator.clipboard.writeText(url);
-            setSnackbarOpen(true);
-        }
-    };
-
-    const handleConfirmLongShare = async () => {
-        setLongUrlDialogOpen(false);
-        await performShare(pendingShareUrl);
     };
 
     const totalAmount = bill.expenses.reduce((sum, e) => sum + getExpenseTotal(e), 0);
@@ -155,18 +119,21 @@ export function BillDetailView({ bill, onBack, isReadOnly = false }: BillDetailV
                         <ArrowBackIcon />
                     </IconButton>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography
-                            variant="h6"
-                            fontWeight={700}
-                            noWrap
-                            onClick={isReadOnly ? undefined : () => { setEditName(bill.name); setEditNameOpen(true); }}
-                            sx={isReadOnly ? undefined : {
-                                cursor: 'pointer',
-                                '&:hover': { color: 'primary.main' },
-                            }}
-                        >
-                            {bill.name}
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                            <Typography
+                                variant="h6"
+                                fontWeight={700}
+                                noWrap
+                                onClick={isReadOnly ? undefined : () => { setEditName(bill.name); setEditNameOpen(true); }}
+                                sx={isReadOnly ? undefined : {
+                                    cursor: 'pointer',
+                                    '&:hover': { color: 'primary.main' },
+                                }}
+                            >
+                                {bill.name}
+                            </Typography>
+                            <SyncStatusIcon status={bill.syncStatus} size="small" />
+                        </Box>
                         <Typography variant="body2" color="text.secondary">
                             {bill.expenses.length} 筆消費 · 總計 {formatAmount(totalAmount)}
                         </Typography>
@@ -215,7 +182,7 @@ export function BillDetailView({ bill, onBack, isReadOnly = false }: BillDetailV
                     )}
                     {!isReadOnly && (
                         <IconButton
-                            onClick={handleShare}
+                            onClick={() => setShareDialogOpen(true)}
                             sx={{
                                 bgcolor: 'primary.main',
                                 color: 'primary.contrastText',
@@ -367,33 +334,12 @@ export function BillDetailView({ bill, onBack, isReadOnly = false }: BillDetailV
                 isReadOnly={isReadOnly}
             />
 
-            <Snackbar
-                open={snackbarOpen}
-                autoHideDuration={3000}
-                onClose={() => setSnackbarOpen(false)}
-                message="已複製分享連結"
+            <ShareDialog
+                bill={bill}
+                open={shareDialogOpen}
+                onClose={() => setShareDialogOpen(false)}
+                isAuthenticated={isAuthenticated}
             />
-
-            <Dialog
-                open={longUrlDialogOpen}
-                onClose={() => setLongUrlDialogOpen(false)}
-                TransitionComponent={SlideTransition}
-            >
-                <DialogTitle>連結較長</DialogTitle>
-                <DialogContent>
-                    <DialogContentText>
-                        產生的連結較長。在瀏覽器中可正常開啟，但部分通訊軟體（如 Line、WeChat）可能會截斷連結。
-                        <br /><br />
-                        建議直接複製連結貼到瀏覽器開啟。
-                    </DialogContentText>
-                </DialogContent>
-                <DialogActions sx={{ p: 2, pt: 0 }}>
-                    <Button onClick={() => setLongUrlDialogOpen(false)}>取消</Button>
-                    <Button onClick={handleConfirmLongShare} variant="contained">
-                        繼續分享
-                    </Button>
-                </DialogActions>
-            </Dialog>
 
             <Dialog
                 open={editNameOpen}

@@ -1,7 +1,8 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   AppBar,
+  Avatar,
   Box,
   Collapse,
   Drawer,
@@ -33,10 +34,15 @@ import {
   ExpandMore as ExpandMoreIcon,
   Terminal as TerminalIcon,
   Today as TodayIcon,
+  AccountCircle as AccountCircleIcon,
 } from '@mui/icons-material';
 import { useThemeStore } from '@/stores/themeStore';
+import { useAuthStore } from '@/stores/authStore';
 import { tools } from '@/utils/tools';
 import { categoryLabels, type ToolCategory } from '@/types/tool';
+import { useAuthHandshake } from '@/hooks/useLoginHandshake';
+import { SyncHandshakeDialog } from '@/components/dialogs/SyncHandshakeDialog';
+import { LoginDialog } from '@/components/dialogs/LoginDialog';
 
 const DRAWER_WIDTH = 230;
 
@@ -71,10 +77,26 @@ export function MainLayout() {
   const location = useLocation();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [loginDialogOpen, setLoginDialogOpen] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Record<ToolCategory, boolean>>(
     () => categories.reduce((acc, cat) => ({ ...acc, [cat]: true }), {} as Record<ToolCategory, boolean>)
   );
   const { resolvedMode, setMode } = useThemeStore();
+  const { isAuthenticated, user, initialize: initializeAuth } = useAuthStore();
+
+  // Initialize auth state on mount
+  useEffect(() => {
+    initializeAuth();
+  }, [initializeAuth]);
+
+  const {
+    showDialog: showSyncDialog,
+    unsyncedBills,
+    syncProgress,
+    dismissDialog: dismissSyncDialog,
+    syncSelectedBills,
+    syncAllBills,
+  } = useAuthHandshake(isAuthenticated);
 
   const toggleCategory = (category: ToolCategory) => {
     setExpandedCategories(prev => ({ ...prev, [category]: !prev[category] }));
@@ -206,6 +228,20 @@ export function MainLayout() {
               {resolvedMode === 'light' ? <DarkModeIcon /> : <LightModeIcon />}
             </IconButton>
           </Tooltip>
+          <Tooltip title={isAuthenticated ? user?.displayName || '帳戶' : '登入'}>
+            <IconButton onClick={() => setLoginDialogOpen(true)} sx={{ color: 'text.primary', ml: 0.5 }}>
+              {isAuthenticated ? (
+                <Avatar
+                  src={user?.avatarUrl || undefined}
+                  sx={{ width: 28, height: 28, fontSize: '0.875rem' }}
+                >
+                  {user?.displayName?.charAt(0) || 'U'}
+                </Avatar>
+              ) : (
+                <AccountCircleIcon />
+              )}
+            </IconButton>
+          </Tooltip>
         </Toolbar>
       </AppBar>
 
@@ -261,6 +297,20 @@ export function MainLayout() {
           <Outlet />
         </Box>
       </Box>
+
+      <SyncHandshakeDialog
+        open={showSyncDialog}
+        onClose={dismissSyncDialog}
+        unsyncedBills={unsyncedBills}
+        syncProgress={syncProgress}
+        onSyncSelected={syncSelectedBills}
+        onSyncAll={syncAllBills}
+      />
+
+      <LoginDialog
+        open={loginDialogOpen}
+        onClose={() => setLoginDialogOpen(false)}
+      />
     </Box>
   );
 }

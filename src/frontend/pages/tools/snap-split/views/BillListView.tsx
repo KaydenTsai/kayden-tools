@@ -13,6 +13,7 @@ import {
     IconButton,
     Paper,
     TextField,
+    Tooltip,
     Typography,
 } from "@mui/material";
 import {
@@ -27,6 +28,7 @@ import { useSnapSplitStore } from "@/stores/snapSplitStore";
 import { formatAmount, getExpenseTotal } from "@/utils/settlement";
 import type { Bill } from "@/types/snap-split";
 import { SlideTransition } from "@/components/ui/SlideTransition";
+import { SyncStatusIcon } from "@/components/ui/SyncStatusIndicator";
 
 export function BillListView() {
     const { bills, selectBill, createBill, deleteBill } = useSnapSplitStore();
@@ -144,9 +146,16 @@ export function BillListView() {
                             >
                                 <CardContent sx={{ p: 2.5, pb: 2 }}>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-                                        <Typography variant="h6" fontWeight={700} sx={{ flex: 1, mr: 1 }} noWrap>
-                                            {bill.name}
-                                        </Typography>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flex: 1, mr: 1, minWidth: 0 }}>
+                                            <Typography variant="h6" fontWeight={700} noWrap>
+                                                {bill.name}
+                                            </Typography>
+                                            <Tooltip title={bill.syncError || ''}>
+                                                <Box sx={{ display: 'flex' }}>
+                                                    <SyncStatusIcon status={bill.syncStatus} size="small" />
+                                                </Box>
+                                            </Tooltip>
+                                        </Box>
                                         <ChevronRightIcon color="action" />
                                     </Box>
 
@@ -178,9 +187,16 @@ export function BillListView() {
                                     </Box>
 
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <Typography variant="caption" color="text.disabled">
-                                            {formatDate(bill.updatedAt)}
-                                        </Typography>
+                                        <Box>
+                                            <Typography variant="caption" color="text.disabled">
+                                                更新於 {formatDate(bill.updatedAt)}
+                                            </Typography>
+                                            {bill.lastSyncedAt && (
+                                                <Typography variant="caption" color="text.disabled" sx={{ ml: 1.5 }}>
+                                                    · 同步於 {formatDate(bill.lastSyncedAt)}
+                                                </Typography>
+                                            )}
+                                        </Box>
                                         <Box onClick={(e) => e.stopPropagation()}>
                                             <IconButton
                                                 size="small"
