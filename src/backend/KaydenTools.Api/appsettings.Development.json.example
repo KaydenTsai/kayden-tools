@@ -1,0 +1,35 @@
+{
+  "Database": {
+    "ConnectionString": "Host=localhost;Port=5432;Database=KaydenTools;Username=postgres;Password=your-password"
+  },
+  "Jwt": {
+    "Secret": "your-super-secret-key-that-is-at-least-32-characters-long",
+    "Issuer": "KaydenTools",
+    "Audience": "KaydenTools",
+    "AccessTokenExpirationMinutes": 15,
+    "RefreshTokenExpirationDays": 7
+  },
+  "LineLogin": {
+    "ChannelId": "",
+    "ChannelSecret": "",
+    "CallbackUrl": "http://localhost:5000/api/auth/line/callback"
+  },
+  "GoogleLogin": {
+    "ClientId": "",
+    "ClientSecret": "",
+    "CallbackUrl": "http://localhost:5000/api/auth/google/callback"
+  },
+  "UrlShortener": {
+    "BaseUrl": "http://localhost:5000",
+    "DefaultCodeLength": 6,
+    "MaxTtlDays": 365,
+    "AllowAnonymousCreation": true,
+    "MaxUrlsPerUser": 100,
+    "RateLimitPerMinute": 10
+  },
+  "Serilog": {
+    "MinimumLevel": {
+      "Default": "Debug"
+    }
+  }
+}

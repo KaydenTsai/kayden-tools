@@ -1,0 +1,21 @@
+# Dot files (IDE, OS, cache, etc.)
+.*
+!.gitignore
+!.gitattributes
+!.editorconfig
+!.env.example
+
+# Dependencies
+node_modules
+
+# Build
+dist
+
+# OS
+Thumbs.db
+
+# Logs
+*.log
+
+# Docs (private planning)
+docs/snapsplit-plan.md

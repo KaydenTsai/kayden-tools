@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!-- NuGet Package Metadata -->
+    <PackageId>Kayden.Commons</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Kayden</Authors>
+    <Description>Common utilities, patterns, and interfaces for .NET applications. Includes Result pattern, Entity interfaces, and more.</Description>
+    <PackageTags>common;utilities;result-pattern;entity;dotnet</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+</Project>
