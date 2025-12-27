@@ -122,11 +122,14 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // CORS
+var allowedOrigins = builder.Configuration["Cors:AllowedOrigins"]?.Split(',')
+    ?? new[] { "http://localhost:5173", "http://localhost:3000" };
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "http://localhost:3000")
+        policy.WithOrigins(allowedOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
@@ -145,15 +148,13 @@ using (var scope = app.Services.CreateScope())
 // Configure pipeline
 app.UseGlobalExceptionHandler();
 
-if (app.Environment.IsDevelopment())
+// Enable Swagger in all environments for now (can be restricted later)
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "KaydenTools API v1");
-        c.RoutePrefix = "swagger";
-    });
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "KaydenTools API v1");
+    c.RoutePrefix = "swagger";
+});
 
 app.UseSerilogRequestLogging();
 app.UseCors("AllowFrontend");
