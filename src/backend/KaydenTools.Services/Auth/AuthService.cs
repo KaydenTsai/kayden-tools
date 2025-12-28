@@ -21,11 +21,6 @@ public class AuthService : IAuthService
     private readonly LineLoginSettings _lineSettings;
     private readonly GoogleLoginSettings _googleSettings;
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
-    };
-
     public AuthService(
         IUnitOfWork unitOfWork,
         IJwtService jwtService,
@@ -40,6 +35,11 @@ public class AuthService : IAuthService
         _httpClientFactory = httpClientFactory;
         _lineSettings = lineSettings;
         _googleSettings = googleSettings;
+    }
+
+    public async Task<User?> GetUserByIdAsync(Guid userId, CancellationToken ct = default)
+    {
+        return await _unitOfWork.Users.GetByIdAsync(userId, ct);
     }
 
     public async Task<Result<AuthResultDto>> LoginWithLineAsync(string code, string? state, CancellationToken ct = default)
@@ -77,6 +77,14 @@ public class AuthService : IAuthService
         }
         else
         {
+            // 如果是被軟刪除的使用者，恢復它
+            if (user.IsDeleted)
+            {
+                user.IsDeleted = false;
+                user.DeletedAt = null;
+                user.DeletedBy = null;
+            }
+
             user.DisplayName = profile.DisplayName;
             user.LinePictureUrl = profile.PictureUrl;
             user.AvatarUrl ??= profile.PictureUrl;
@@ -144,6 +152,14 @@ public class AuthService : IAuthService
         }
         else
         {
+            // 如果是被軟刪除的使用者，恢復它
+            if (user.IsDeleted)
+            {
+                user.IsDeleted = false;
+                user.DeletedAt = null;
+                user.DeletedBy = null;
+            }
+
             user.DisplayName = userInfo.Name ?? user.DisplayName;
             user.GooglePictureUrl = userInfo.Picture;
             user.AvatarUrl ??= userInfo.Picture;
@@ -266,7 +282,7 @@ public class AuthService : IAuthService
                 return null;
             }
 
-            return await response.Content.ReadFromJsonAsync<LineTokenResponse>(JsonOptions, ct);
+            return await response.Content.ReadFromJsonAsync<LineTokenResponse>(cancellationToken: ct);
         }
         catch
         {
@@ -287,7 +303,7 @@ public class AuthService : IAuthService
                 return null;
             }
 
-            return await response.Content.ReadFromJsonAsync<LineUserProfile>(JsonOptions, ct);
+            return await response.Content.ReadFromJsonAsync<LineUserProfile>(cancellationToken: ct);
         }
         catch
         {
@@ -316,7 +332,7 @@ public class AuthService : IAuthService
                 return null;
             }
 
-            return await response.Content.ReadFromJsonAsync<GoogleTokenResponse>(JsonOptions, ct);
+            return await response.Content.ReadFromJsonAsync<GoogleTokenResponse>(cancellationToken: ct);
         }
         catch
         {
@@ -337,7 +353,7 @@ public class AuthService : IAuthService
                 return null;
             }
 
-            return await response.Content.ReadFromJsonAsync<GoogleUserInfo>(JsonOptions, ct);
+            return await response.Content.ReadFromJsonAsync<GoogleUserInfo>(cancellationToken: ct);
         }
         catch
         {

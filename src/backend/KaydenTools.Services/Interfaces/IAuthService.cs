@@ -1,5 +1,6 @@
 using Kayden.Commons.Common;
 using KaydenTools.Models.Shared.Dtos;
+using KaydenTools.Models.Shared.Entities;
 
 namespace KaydenTools.Services.Interfaces;
 
@@ -8,6 +9,10 @@ namespace KaydenTools.Services.Interfaces;
 /// </summary>
 public interface IAuthService
 {
+    /// <summary>
+    /// 根據 ID 取得使用者
+    /// </summary>
+    Task<User?> GetUserByIdAsync(Guid userId, CancellationToken ct = default);
     /// <summary>
     /// 使用 LINE 登入
     /// </summary>

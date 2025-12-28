@@ -16,20 +16,31 @@ export function AuthCallbackPage() {
 
     useEffect(() => {
         const handleCallback = async () => {
+            // 檢查是否有錯誤（使用者取消授權等）
+            const errorParam = searchParams.get('error');
+            const errorDescription = searchParams.get('error_description');
+            if (errorParam) {
+                const errorMessage = errorDescription ||
+                    (errorParam === 'access_denied' ? '您已取消授權' : `授權失敗: ${errorParam}`);
+                setError(errorMessage);
+                setIsProcessing(false);
+                return;
+            }
+
             const code = searchParams.get('code');
             const state = searchParams.get('state');
             const provider = searchParams.get('provider') || detectProvider();
 
             if (!code) {
-                setError('Missing authorization code');
+                setError('缺少授權碼');
                 setIsProcessing(false);
                 return;
             }
 
-            // Validate state for CSRF protection
+            // 驗證 state 防止 CSRF 攻擊
             const savedState = sessionStorage.getItem('oauth_state');
             if (savedState && state !== savedState) {
-                setError('Invalid state parameter');
+                setError('安全驗證失敗，請重新登入');
                 setIsProcessing(false);
                 return;
             }
@@ -40,7 +51,6 @@ export function AuthCallbackPage() {
                 if (provider === 'google') {
                     response = await postApiAuthGoogleCallback({ code });
                 } else {
-                    // Default to LINE
                     response = await postApiAuthLineCallback({ code, state: state || '' });
                 }
 
@@ -48,15 +58,14 @@ export function AuthCallbackPage() {
                     const { accessToken, refreshToken, expiresAt, user } = response.data;
                     if (accessToken && refreshToken && expiresAt && user) {
                         setAuth(accessToken, refreshToken, expiresAt, user);
-                        // Navigate back to the app
                         navigate('/', { replace: true });
                         return;
                     }
                 }
 
-                setError('Login failed. Please try again.');
+                setError('登入失敗，請重試');
             } catch {
-                setError('An error occurred during login.');
+                setError('登入過程發生錯誤');
             } finally {
                 setIsProcessing(false);
             }
