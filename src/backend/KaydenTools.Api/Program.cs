@@ -64,6 +64,9 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
+    // 禁用 claim 類型自動映射，保留原始 JWT claim 名稱（sub, email, name 等）
+    options.MapInboundClaims = false;
+
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuerSigningKey = true,

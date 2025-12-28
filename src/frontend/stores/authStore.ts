@@ -85,9 +85,9 @@ export const useAuthStore = create<AuthState>()(
                     if (response.success && response.data) {
                         set({ user: response.data });
                     }
-                } catch {
-                    // Token might be invalid
-                    get().clearAuth();
+                } catch (error) {
+                    // 錯誤時不清除登入狀態，避免競態條件導致剛登入就被登出
+                    console.warn('取得使用者資訊失敗:', error);
                 }
             },
 

@@ -17,11 +17,17 @@ public class UserRepository : Repository<User>, IUserRepository
 
     public async Task<User?> GetByLineUserIdAsync(string lineUserId, CancellationToken ct = default)
     {
-        return await DbSet.FirstOrDefaultAsync(u => u.LineUserId == lineUserId, ct);
+        // 忽略軟刪除過濾器，避免找不到已刪除的使用者而造成重複新增
+        return await DbSet
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(u => u.LineUserId == lineUserId, ct);
     }
 
     public async Task<User?> GetByGoogleUserIdAsync(string googleUserId, CancellationToken ct = default)
     {
-        return await DbSet.FirstOrDefaultAsync(u => u.GoogleUserId == googleUserId, ct);
+        // 忽略軟刪除過濾器，避免找不到已刪除的使用者而造成重複新增
+        return await DbSet
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(u => u.GoogleUserId == googleUserId, ct);
     }
 }

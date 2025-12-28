@@ -7,9 +7,34 @@
 <body>
   <p>Redirecting...</p>
   <script>
-    // Redirect to hash router with query params preserved
-    var hash = '#/auth/callback' + window.location.search;
-    window.location.replace(window.location.origin + '/' + hash);
+    (function() {
+      // 安全性由 LINE Callback URL 設定 + state 驗證提供
+      var params = new URLSearchParams(window.location.search);
+      var code = params.get('code');
+      var state = params.get('state');
+      var error = params.get('error');
+      var errorDescription = params.get('error_description');
+
+      var targetUrl;
+      if (error) {
+        // 使用者取消授權或發生錯誤
+        targetUrl = '/#/auth/callback?error=' + encodeURIComponent(error);
+        if (errorDescription) {
+          targetUrl += '&error_description=' + encodeURIComponent(errorDescription);
+        }
+      } else if (code) {
+        // 授權成功
+        targetUrl = '/#/auth/callback?code=' + encodeURIComponent(code);
+        if (state) {
+          targetUrl += '&state=' + encodeURIComponent(state);
+        }
+      } else {
+        // 參數不完整，回首頁
+        targetUrl = '/';
+      }
+
+      window.location.replace(targetUrl);
+    })();
   </script>
 </body>
 </html>

@@ -175,22 +175,21 @@ public class AuthController : ControllerBase
     [Authorize]
     [ProducesResponseType(typeof(ApiResponse<UserDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status401Unauthorized)]
-    public IActionResult GetCurrentUser()
+    public async Task<IActionResult> GetCurrentUser(CancellationToken ct)
     {
-        var userId = User.FindFirst("sub")?.Value;
-        var email = User.FindFirst("email")?.Value;
-        var name = User.FindFirst("name")?.Value;
+        var userIdClaim = User.FindFirst("sub")?.Value;
 
-        if (string.IsNullOrEmpty(userId))
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
         {
             return Unauthorized(ApiResponse.Fail(ErrorCodes.Unauthorized, "User not authenticated."));
         }
 
-        return Ok(ApiResponse.Ok(new
+        var user = await _authService.GetUserByIdAsync(userId, ct);
+        if (user == null)
         {
-            id = Guid.Parse(userId),
-            email,
-            displayName = name
-        }));
+            return Unauthorized(ApiResponse.Fail(ErrorCodes.Unauthorized, "User not found."));
+        }
+
+        return Ok(ApiResponse.Ok(new UserDto(user.Id, user.Email, user.DisplayName, user.AvatarUrl)));
     }
 }
