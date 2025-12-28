@@ -436,7 +436,7 @@ export function BillDetailView({ bill, onBack, isReadOnly = false, isAuthenticat
             />
 
             <ShareDialog
-                bill={bill}
+                billId={bill.id}
                 open={shareDialogOpen}
                 onClose={() => setShareDialogOpen(false)}
                 isAuthenticated={isAuthenticated}
@@ -469,7 +469,7 @@ export function BillDetailView({ bill, onBack, isReadOnly = false, isAuthenticat
             </Dialog>
 
             <ClaimPromptDialog
-                bill={bill}
+                billId={bill.id}
                 open={claimPromptOpen}
                 onClose={() => setClaimPromptOpen(false)}
                 onSkip={handleSkipClaim}

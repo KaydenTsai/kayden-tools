@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     Dialog,
     DialogTitle,
@@ -20,15 +20,15 @@ import {
     Link as LinkIcon,
     Cloud as CloudIcon,
     QrCode as QrCodeIcon,
+    Refresh as RetryIcon,
 } from '@mui/icons-material';
 import { SlideTransition } from '@/components/ui/SlideTransition';
-import { SyncStatusIndicator } from '@/components/ui/SyncStatusIndicator';
 import { encodeBillToUrl } from '@/utils/shareUrl';
 import { useBillSync } from '@/hooks/useBillSync';
-import type { Bill } from '@/types/snap-split';
+import { useSnapSplitStore } from '@/stores/snapSplitStore';
 
 interface ShareDialogProps {
-    bill: Bill;
+    billId: string;
     open: boolean;
     onClose: () => void;
     isAuthenticated?: boolean;
@@ -49,21 +49,50 @@ function TabPanel({ children, value, index }: TabPanelProps) {
 }
 
 export function ShareDialog({
-    bill,
+    billId,
     open,
     onClose,
     isAuthenticated = false,
 }: ShareDialogProps) {
+    // 從 store 直接讀取，確保同步後能即時反映最新狀態
+    const bill = useSnapSplitStore(state => state.bills.find(b => b.id === billId));
+
     const [tabValue, setTabValue] = useState(isAuthenticated ? 1 : 0);
     const [snackbarOpen, setSnackbarOpen] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
+    const [syncError, setSyncError] = useState<string | null>(null);
 
     const { syncBill, isUploading } = useBillSync();
+    const hasSyncedRef = useRef(false);
+
+    // 帳單不存在時不渲染
+    if (!bill) return null;
 
     const { url: snapshotUrl, isLong } = encodeBillToUrl(bill);
     const cloudShareUrl = bill.shareCode
         ? `${window.location.origin}${window.location.pathname}#/snap-split/share/${bill.shareCode}`
         : null;
+
+    // 自動同步：當雲端分享 tab 被選中且帳單尚未同步時
+    const needsSync = isAuthenticated && !bill.shareCode && bill.syncStatus !== 'syncing';
+
+    useEffect(() => {
+        if (open && tabValue === 1 && needsSync && !hasSyncedRef.current && !isUploading) {
+            hasSyncedRef.current = true;
+            setSyncError(null);
+            syncBill(bill).catch((err) => {
+                setSyncError(err instanceof Error ? err.message : '同步失敗');
+            });
+        }
+    }, [open, tabValue, needsSync, isUploading, bill, syncBill]);
+
+    // 重置 ref 當 dialog 關閉時
+    useEffect(() => {
+        if (!open) {
+            hasSyncedRef.current = false;
+            setSyncError(null);
+        }
+    }, [open]);
 
     const handleCopy = async (text: string, label: string) => {
         try {
@@ -76,14 +105,12 @@ export function ShareDialog({
         }
     };
 
-    const handleSyncAndShare = async () => {
+    const handleRetrySync = async () => {
+        setSyncError(null);
         try {
             await syncBill(bill);
-            setSnackbarMessage('同步成功！分享碼已產生');
-            setSnackbarOpen(true);
-        } catch {
-            setSnackbarMessage('同步失敗，請稍後重試');
-            setSnackbarOpen(true);
+        } catch (err) {
+            setSyncError(err instanceof Error ? err.message : '同步失敗');
         }
     };
 
@@ -97,10 +124,7 @@ export function ShareDialog({
                 TransitionComponent={SlideTransition}
             >
                 <DialogTitle sx={{ pb: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        分享帳單
-                        <SyncStatusIndicator status={bill.syncStatus} size="small" />
-                    </Box>
+                    分享帳單
                 </DialogTitle>
 
                 <DialogContent>
@@ -212,29 +236,32 @@ export function ShareDialog({
                                     雲端分享會顯示最新資料，你對帳單的修改會自動同步。
                                 </Alert>
                             </>
-                        ) : (
+                        ) : syncError ? (
+                            // 同步失敗 - 顯示重試按鈕
                             <>
-                                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                    將帳單上傳到雲端以獲得分享碼，對方可透過分享碼查看最新資料。
-                                </Typography>
-
-                                <Box sx={{ textAlign: 'center', py: 3 }}>
+                                <Alert severity="error" sx={{ mb: 2 }}>
+                                    {syncError}
+                                </Alert>
+                                <Box sx={{ textAlign: 'center', py: 2 }}>
                                     <Button
                                         variant="contained"
                                         size="large"
-                                        startIcon={isUploading ? <CircularProgress size={20} color="inherit" /> : <CloudIcon />}
-                                        onClick={handleSyncAndShare}
+                                        startIcon={isUploading ? <CircularProgress size={20} color="inherit" /> : <RetryIcon />}
+                                        onClick={handleRetrySync}
                                         disabled={isUploading}
-                                        sx={{ px: 4 }}
                                     >
-                                        {isUploading ? '上傳中...' : '上傳並產生分享碼'}
+                                        {isUploading ? '同步中...' : '重試'}
                                     </Button>
                                 </Box>
-
-                                <Alert severity="info">
-                                    上傳後，你可以在任何裝置登入並存取這份帳單。
-                                </Alert>
                             </>
+                        ) : (
+                            // 同步中 - 顯示 loading
+                            <Box sx={{ textAlign: 'center', py: 4 }}>
+                                <CircularProgress size={40} sx={{ mb: 2 }} />
+                                <Typography color="text.secondary">
+                                    正在同步帳單到雲端...
+                                </Typography>
+                            </Box>
                         )}
                     </TabPanel>
                 </DialogContent>

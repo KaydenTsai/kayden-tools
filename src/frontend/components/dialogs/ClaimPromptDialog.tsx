@@ -23,28 +23,34 @@ import { SlideTransition } from '@/components/ui/SlideTransition';
 import { useSnapSplitStore } from '@/stores/snapSplitStore';
 import { useAuthStore } from '@/stores/authStore';
 import { usePostApiMembersIdClaim } from '@/api/endpoints/members/members';
-import type { Bill, Member } from '@/types/snap-split';
+import { useBillSync } from '@/hooks/useBillSync';
+import type { Member } from '@/types/snap-split';
 import { getMemberColor } from '@/utils/settlement';
 
 interface ClaimPromptDialogProps {
-    bill: Bill;
+    billId: string;
     open: boolean;
     onClose: () => void;
     onSkip: () => void;
 }
 
 export function ClaimPromptDialog({
-    bill,
+    billId,
     open,
     onClose,
     onSkip,
 }: ClaimPromptDialogProps) {
     const { user } = useAuthStore();
-    const { claimMember } = useSnapSplitStore();
+    const { claimMember, bills } = useSnapSplitStore();
+    const { syncBill } = useBillSync();
+
+    // 從 store 直接讀取，確保同步後能即時反映最新狀態
+    const bill = bills.find(b => b.id === billId);
     const [selectedMember, setSelectedMember] = useState<Member | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [isSyncing, setIsSyncing] = useState(false);
 
-    const { mutate: claimMemberApi, isPending } = usePostApiMembersIdClaim({
+    const { mutate: claimMemberApi, isPending: isClaimPending } = usePostApiMembersIdClaim({
         mutation: {
             onSuccess: (response) => {
                 if (response.success && response.data && user?.id) {
@@ -65,6 +71,9 @@ export function ClaimPromptDialog({
         },
     });
 
+    // 帳單不存在時不渲染
+    if (!bill) return null;
+
     // 取得未認領的成員
     const unclaimedMembers = bill.members.filter(m => !m.userId);
 
@@ -73,26 +82,41 @@ export function ClaimPromptDialog({
         setError(null);
     };
 
-    const handleConfirm = () => {
+    const handleConfirm = async () => {
         if (!selectedMember || !user?.id) return;
+        setError(null);
 
-        // 如果帳單已同步到雲端，呼叫 API
-        if (bill.remoteId) {
+        let memberRemoteId = selectedMember.remoteId;
+
+        // 如果帳單尚未同步到雲端，先同步
+        if (!bill.remoteId) {
+            setIsSyncing(true);
+            try {
+                const syncResult = await syncBill(bill);
+                // 從同步結果取得成員的 remoteId
+                memberRemoteId = syncResult.idMappings?.members?.[selectedMember.id];
+                if (!memberRemoteId) {
+                    throw new Error('成員同步失敗');
+                }
+            } catch (err) {
+                setError('同步帳單失敗，請稍後再試');
+                console.error('Sync failed:', err);
+                setIsSyncing(false);
+                return;
+            }
+            setIsSyncing(false);
+        }
+
+        // 呼叫認領 API（使用 remoteId）
+        if (memberRemoteId) {
             claimMemberApi({
-                id: selectedMember.id,
+                id: memberRemoteId,
                 data: {
                     displayName: user.displayName ?? user.email ?? undefined,
                 },
             });
         } else {
-            // 本地帳單，直接更新 store
-            claimMember({
-                memberId: selectedMember.id,
-                userId: user.id,
-                displayName: user.displayName ?? user.email ?? '使用者',
-                avatarUrl: user.avatarUrl ?? undefined,
-            });
-            onClose();
+            setError('成員尚未同步，請稍後再試');
         }
     };
 
@@ -174,10 +198,10 @@ export function ClaimPromptDialog({
                     variant="contained"
                     size="large"
                     onClick={handleConfirm}
-                    disabled={!selectedMember || isPending}
-                    startIcon={isPending ? <CircularProgress size={20} color="inherit" /> : undefined}
+                    disabled={!selectedMember || isSyncing || isClaimPending}
+                    startIcon={(isSyncing || isClaimPending) ? <CircularProgress size={20} color="inherit" /> : undefined}
                 >
-                    {isPending ? '認領中...' : '確認，這是我'}
+                    {isSyncing ? '同步中...' : isClaimPending ? '認領中...' : '確認，這是我'}
                 </Button>
 
                 <Box sx={{ display: 'flex', gap: 1, width: '100%' }}>
@@ -187,7 +211,7 @@ export function ClaimPromptDialog({
                         size="large"
                         onClick={handleSkip}
                         startIcon={<LaterIcon />}
-                        disabled={isPending}
+                        disabled={isSyncing || isClaimPending}
                     >
                         稍後再說
                     </Button>
