@@ -1,10 +1,12 @@
-import { Chip, CircularProgress, Tooltip } from '@mui/material';
+import { useState } from 'react';
+import { Box, Chip, CircularProgress, Snackbar, Tooltip, useMediaQuery, useTheme } from '@mui/material';
 import {
     CloudDone as SyncedIcon,
     CloudOff as LocalIcon,
     CloudSync as SyncingIcon,
     CloudUpload as ModifiedIcon,
     ErrorOutline as ErrorIcon,
+    Group as CollaborativeIcon,
 } from '@mui/icons-material';
 import type { SyncStatus } from '@/types/snap-split';
 
@@ -13,19 +15,22 @@ interface SyncStatusIndicatorProps {
     error?: string;
     size?: 'small' | 'medium';
     showLabel?: boolean;
+    isCollaborative?: boolean;
 }
 
-const statusConfig: Record<SyncStatus, {
+type StatusKey = SyncStatus | 'collaborative';
+
+const statusConfig: Record<StatusKey, {
     icon: React.ReactNode;
     label: string;
-    color: 'default' | 'success' | 'warning' | 'info' | 'error';
+    color: 'default' | 'success' | 'warning' | 'info' | 'error' | 'primary';
     tooltip: string;
 }> = {
     local: {
         icon: <LocalIcon fontSize="small" />,
         label: '本地',
         color: 'default',
-        tooltip: '僅存於本地，未同步到雲端',
+        tooltip: '本地帳單，僅存於此裝置',
     },
     synced: {
         icon: <SyncedIcon fontSize="small" />,
@@ -51,6 +56,12 @@ const statusConfig: Record<SyncStatus, {
         color: 'error',
         tooltip: '同步失敗，點擊重試',
     },
+    collaborative: {
+        icon: <CollaborativeIcon fontSize="small" />,
+        label: '協作',
+        color: 'primary',
+        tooltip: '多人協作帳單',
+    },
 };
 
 export function SyncStatusIndicator({
@@ -58,10 +69,13 @@ export function SyncStatusIndicator({
     error,
     size = 'small',
     showLabel = true,
+    isCollaborative = false,
 }: SyncStatusIndicatorProps) {
     // Default to 'local' if status is undefined
     const safeStatus = status || 'local';
-    const config = statusConfig[safeStatus] || statusConfig.local;
+    // 協作模式優先顯示
+    const displayKey: StatusKey = isCollaborative ? 'collaborative' : safeStatus;
+    const config = statusConfig[displayKey] || statusConfig.local;
     const tooltipText = error ? `${config.tooltip}: ${error}` : config.tooltip;
 
     return (
@@ -87,42 +101,102 @@ export function SyncStatusIndicator({
 interface SyncStatusIconProps {
     status: SyncStatus;
     size?: 'small' | 'medium' | 'large';
+    isCollaborative?: boolean;
 }
 
-export function SyncStatusIcon({ status, size = 'small' }: SyncStatusIconProps) {
+export function SyncStatusIcon({ status, size = 'small', isCollaborative = false }: SyncStatusIconProps) {
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+    const [snackbarOpen, setSnackbarOpen] = useState(false);
+
     const fontSize = size === 'small' ? 16 : size === 'medium' ? 20 : 24;
 
-    const iconColors: Record<SyncStatus, string> = {
+    // Default to 'local' if status is undefined
+    const safeStatus = status || 'local';
+
+    // 協作模式優先顯示
+    const displayMode = isCollaborative ? 'collaborative' : safeStatus;
+
+    const iconColors: Record<string, string> = {
         local: 'text.secondary',
         synced: 'success.main',
         modified: 'warning.main',
         syncing: 'info.main',
         error: 'error.main',
+        collaborative: 'primary.main',
     };
 
-    // Default to 'local' if status is undefined
-    const safeStatus = status || 'local';
+    const tooltipTexts: Record<string, string> = {
+        local: '本地帳單，僅存於此裝置',
+        synced: '已與雲端同步',
+        modified: '有修改尚未同步',
+        syncing: '正在同步...',
+        error: '同步失敗',
+        collaborative: '多人協作帳單',
+    };
 
-    if (safeStatus === 'syncing') {
-        return <CircularProgress size={fontSize} sx={{ color: iconColors[safeStatus] }} />;
+    const handleClick = () => {
+        if (isMobile) {
+            setSnackbarOpen(true);
+        }
+    };
+
+    if (safeStatus === 'syncing' && !isCollaborative) {
+        return <CircularProgress size={fontSize} sx={{ color: iconColors.syncing }} />;
     }
 
-    const iconMap = {
+    const iconMap: Record<string, typeof LocalIcon> = {
         local: LocalIcon,
         synced: SyncedIcon,
         modified: ModifiedIcon,
         syncing: SyncingIcon,
         error: ErrorIcon,
+        collaborative: CollaborativeIcon,
     };
 
-    const IconComponent = iconMap[safeStatus] || LocalIcon;
+    const IconComponent = iconMap[displayMode] || LocalIcon;
+    const tooltipText = tooltipTexts[displayMode] || '';
 
     return (
-        <IconComponent
-            sx={{
-                fontSize,
-                color: iconColors[safeStatus] || 'text.secondary',
-            }}
-        />
+        <>
+            <Tooltip
+                title={tooltipText}
+                arrow
+                disableHoverListener={isMobile}
+                disableFocusListener={isMobile}
+            >
+                <Box
+                    component="span"
+                    onClick={handleClick}
+                    sx={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        cursor: isMobile ? 'pointer' : 'default',
+                    }}
+                >
+                    <IconComponent
+                        sx={{
+                            fontSize,
+                            color: iconColors[displayMode] || 'text.secondary',
+                        }}
+                    />
+                </Box>
+            </Tooltip>
+            <Snackbar
+                open={snackbarOpen}
+                autoHideDuration={2000}
+                onClose={() => setSnackbarOpen(false)}
+                message={tooltipText}
+                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+                sx={{
+                    '& .MuiSnackbarContent-root': {
+                        minWidth: 'auto',
+                        py: 0.5,
+                        px: 2,
+                        borderRadius: 2,
+                    },
+                }}
+            />
+        </>
     );
 }

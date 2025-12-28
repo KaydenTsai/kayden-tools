@@ -8,6 +8,7 @@ import {
 import { useMemo } from "react";
 import type { Bill } from "@/types/snap-split";
 import { useSnapSplitStore } from "@/stores/snapSplitStore";
+import { useAuthStore } from "@/stores/authStore";
 import {
     calculateSettlement,
     formatAmount,
@@ -23,6 +24,13 @@ interface SettlementPanelProps {
 
 export function SettlementPanel({ bill, isReadOnly = false }: SettlementPanelProps) {
     const { toggleSettlement } = useSnapSplitStore();
+    const { user } = useAuthStore();
+
+    // 判斷成員是否為「離線」狀態（已認領但非當前用戶）
+    const isMemberOffline = (memberId: string) => {
+        const member = bill.members.find(m => m.id === memberId);
+        return !!member?.userId && member.userId !== user?.id;
+    };
 
     const settlement = useMemo(() => {
         if (bill.expenses.length === 0) return null;
@@ -107,12 +115,15 @@ export function SettlementPanel({ bill, isReadOnly = false }: SettlementPanelPro
                                     >
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                                             <Avatar
+                                                src={bill.members.find(m => m.id === summary.memberId)?.avatarUrl}
                                                 sx={{
                                                     bgcolor: getMemberColor(summary.memberId, bill.members),
                                                     width: 32,
                                                     height: 32,
                                                     fontSize: '0.875rem',
-                                                    fontWeight: 600
+                                                    fontWeight: 600,
+                                                    opacity: isMemberOffline(summary.memberId) ? 0.6 : 1,
+                                                    filter: isMemberOffline(summary.memberId) ? 'grayscale(30%)' : 'none',
                                                 }}
                                             >
                                                 {getMemberName(bill.members, summary.memberId).charAt(0).toUpperCase()}
@@ -215,12 +226,15 @@ export function SettlementPanel({ bill, isReadOnly = false }: SettlementPanelPro
                                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 0.5 }}>
                                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                                                             <Avatar
+                                                                src={bill.members.find(m => m.id === transfer.from)?.avatarUrl}
                                                                 sx={{
                                                                     bgcolor: getMemberColor(transfer.from, bill.members),
                                                                     width: 24,
                                                                     height: 24,
                                                                     fontSize: '0.75rem',
-                                                                    fontWeight: 600
+                                                                    fontWeight: 600,
+                                                                    opacity: isMemberOffline(transfer.from) ? 0.6 : 1,
+                                                                    filter: isMemberOffline(transfer.from) ? 'grayscale(30%)' : 'none',
                                                                 }}
                                                             >
                                                                 {getMemberName(bill.members, transfer.from).charAt(0).toUpperCase()}
@@ -240,12 +254,15 @@ export function SettlementPanel({ bill, isReadOnly = false }: SettlementPanelPro
 
                                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                                                             <Avatar
+                                                                src={bill.members.find(m => m.id === transfer.to)?.avatarUrl}
                                                                 sx={{
                                                                     bgcolor: getMemberColor(transfer.to, bill.members),
                                                                     width: 24,
                                                                     height: 24,
                                                                     fontSize: '0.75rem',
-                                                                    fontWeight: 600
+                                                                    fontWeight: 600,
+                                                                    opacity: isMemberOffline(transfer.to) ? 0.6 : 1,
+                                                                    filter: isMemberOffline(transfer.to) ? 'grayscale(30%)' : 'none',
                                                                 }}
                                                             >
                                                                 {getMemberName(bill.members, transfer.to).charAt(0).toUpperCase()}

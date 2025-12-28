@@ -4,12 +4,15 @@ import { Edit as EditIcon } from "@mui/icons-material";
 interface UserAvatarProps {
     name: string;
     color: string;
+    avatarUrl?: string;
     selected?: boolean;
     onClick?: () => void;
     size?: number; // Default 48
+    /** 已認領但非當前用戶時顯示離線效果 */
+    isOffline?: boolean;
 }
 
-export function UserAvatar({ name, color, selected, onClick, size = 48 }: UserAvatarProps) {
+export function UserAvatar({ name, color, avatarUrl, selected, onClick, size = 48, isOffline = false }: UserAvatarProps) {
     return (
         <Stack alignItems="center" spacing={0.5} sx={{ width: size + 16 }}>
             <Box
@@ -25,6 +28,7 @@ export function UserAvatar({ name, color, selected, onClick, size = 48 }: UserAv
                 }}
             >
                 <Avatar
+                    src={avatarUrl}
                     sx={{
                         bgcolor: color,
                         width: size,
@@ -33,6 +37,9 @@ export function UserAvatar({ name, color, selected, onClick, size = 48 }: UserAv
                         fontWeight: 600,
                         transition: 'transform 0.1s',
                         '&:active': onClick ? { transform: 'scale(0.95)' } : {},
+                        // 離線效果
+                        opacity: isOffline ? 0.6 : 1,
+                        filter: isOffline ? 'grayscale(30%)' : 'none',
                     }}
                 >
                     {name.charAt(0).toUpperCase()}

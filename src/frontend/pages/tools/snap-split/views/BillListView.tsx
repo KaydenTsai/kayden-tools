@@ -13,7 +13,6 @@ import {
     IconButton,
     Paper,
     TextField,
-    Tooltip,
     Typography,
 } from "@mui/material";
 import {
@@ -150,11 +149,11 @@ export function BillListView() {
                                             <Typography variant="h6" fontWeight={700} noWrap>
                                                 {bill.name}
                                             </Typography>
-                                            <Tooltip title={bill.syncError || ''}>
-                                                <Box sx={{ display: 'flex' }}>
-                                                    <SyncStatusIcon status={bill.syncStatus} size="small" />
-                                                </Box>
-                                            </Tooltip>
+                                            <SyncStatusIcon
+                                                status={bill.syncStatus}
+                                                size="small"
+                                                isCollaborative={bill.members.some(m => !!m.userId)}
+                                            />
                                         </Box>
                                         <ChevronRightIcon color="action" />
                                     </Box>

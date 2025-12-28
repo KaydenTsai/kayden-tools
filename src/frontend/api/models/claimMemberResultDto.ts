@@ -6,19 +6,16 @@
  * OpenAPI spec version: v1
  */
 
-export interface MemberDto {
-  id?: string;
+export interface ClaimMemberResultDto {
+  memberId?: string;
   /** @nullable */
   name?: string | null;
   /** @nullable */
   originalName?: string | null;
-  displayOrder?: number;
-  /** @nullable */
-  linkedUserId?: string | null;
+  linkedUserId?: string;
   /** @nullable */
   linkedUserDisplayName?: string | null;
   /** @nullable */
   linkedUserAvatarUrl?: string | null;
-  /** @nullable */
-  claimedAt?: string | null;
+  claimedAt?: string;
 }

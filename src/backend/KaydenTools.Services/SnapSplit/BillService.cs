@@ -409,7 +409,16 @@ public class BillService : IBillService
             bill.ShareCode,
             bill.CreatedAt,
             bill.UpdatedAt,
-            bill.Members.Select(m => new MemberDto(m.Id, m.Name, m.DisplayOrder, m.LinkedUserId)).ToList(),
+            bill.Members.Select(m => new MemberDto(
+                m.Id,
+                m.Name,
+                m.OriginalName,
+                m.DisplayOrder,
+                m.LinkedUserId,
+                m.LinkedUser?.DisplayName,
+                m.LinkedUser?.AvatarUrl,
+                m.ClaimedAt
+            )).ToList(),
             bill.Expenses.Select(e => new ExpenseDto(
                 e.Id,
                 e.Name,

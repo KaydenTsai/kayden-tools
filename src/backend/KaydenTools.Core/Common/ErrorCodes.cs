@@ -57,6 +57,18 @@ public static class ErrorCodes
     /// <summary>無效的分享碼</summary>
     public const string InvalidShareCode = "INVALID_SHARE_CODE";
 
+    /// <summary>成員已被認領</summary>
+    public const string MemberAlreadyClaimed = "MEMBER_ALREADY_CLAIMED";
+
+    /// <summary>使用者已在此帳單認領其他成員</summary>
+    public const string UserAlreadyClaimedOther = "USER_ALREADY_CLAIMED_OTHER";
+
+    /// <summary>成員未被認領</summary>
+    public const string MemberNotClaimed = "MEMBER_NOT_CLAIMED";
+
+    /// <summary>無權取消認領</summary>
+    public const string UnauthorizedUnclaim = "UNAUTHORIZED_UNCLAIM";
+
     #endregion
 
     #region UrlShortener

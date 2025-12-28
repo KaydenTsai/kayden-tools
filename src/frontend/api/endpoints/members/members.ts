@@ -15,6 +15,8 @@ import type {
 
 import type {
   ApiResponse,
+  ClaimMemberDto,
+  ClaimMemberResultDtoApiResponse,
   CreateMemberDto,
   MemberDtoApiResponse,
   UpdateMemberDto,
@@ -262,6 +264,179 @@ export const useDeleteApiMembersId = <
   TContext
 > => {
   const mutationOptions = getDeleteApiMembersIdMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+/**
+ * @summary 認領成員（綁定當前使用者）
+ */
+export const postApiMembersIdClaim = (
+  id: string,
+  claimMemberDto: ClaimMemberDto,
+  signal?: AbortSignal,
+) => {
+  return axiosInstance<ClaimMemberResultDtoApiResponse>({
+    url: `/api/members/${id}/claim`,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: claimMemberDto,
+    signal,
+  });
+};
+
+export const getPostApiMembersIdClaimMutationOptions = <
+  TError = ApiResponse | ApiResponse | ApiResponse | ApiResponse,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof postApiMembersIdClaim>>,
+    TError,
+    { id: string; data: ClaimMemberDto },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof postApiMembersIdClaim>>,
+  TError,
+  { id: string; data: ClaimMemberDto },
+  TContext
+> => {
+  const mutationKey = ["postApiMembersIdClaim"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof postApiMembersIdClaim>>,
+    { id: string; data: ClaimMemberDto }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return postApiMembersIdClaim(id, data);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PostApiMembersIdClaimMutationResult = NonNullable<
+  Awaited<ReturnType<typeof postApiMembersIdClaim>>
+>;
+export type PostApiMembersIdClaimMutationBody = ClaimMemberDto;
+export type PostApiMembersIdClaimMutationError =
+  | ApiResponse
+  | ApiResponse
+  | ApiResponse
+  | ApiResponse;
+
+/**
+ * @summary 認領成員（綁定當前使用者）
+ */
+export const usePostApiMembersIdClaim = <
+  TError = ApiResponse | ApiResponse | ApiResponse | ApiResponse,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof postApiMembersIdClaim>>,
+      TError,
+      { id: string; data: ClaimMemberDto },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof postApiMembersIdClaim>>,
+  TError,
+  { id: string; data: ClaimMemberDto },
+  TContext
+> => {
+  const mutationOptions = getPostApiMembersIdClaimMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+/**
+ * @summary 取消認領成員
+ */
+export const deleteApiMembersIdClaim = (id: string) => {
+  return axiosInstance<void>({
+    url: `/api/members/${id}/claim`,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteApiMembersIdClaimMutationOptions = <
+  TError = ApiResponse | ApiResponse | ApiResponse | ApiResponse,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteApiMembersIdClaim>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteApiMembersIdClaim>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["deleteApiMembersIdClaim"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteApiMembersIdClaim>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteApiMembersIdClaim(id);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteApiMembersIdClaimMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteApiMembersIdClaim>>
+>;
+
+export type DeleteApiMembersIdClaimMutationError =
+  | ApiResponse
+  | ApiResponse
+  | ApiResponse
+  | ApiResponse;
+
+/**
+ * @summary 取消認領成員
+ */
+export const useDeleteApiMembersIdClaim = <
+  TError = ApiResponse | ApiResponse | ApiResponse | ApiResponse,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deleteApiMembersIdClaim>>,
+      TError,
+      { id: string },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof deleteApiMembersIdClaim>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationOptions = getDeleteApiMembersIdClaimMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
 };

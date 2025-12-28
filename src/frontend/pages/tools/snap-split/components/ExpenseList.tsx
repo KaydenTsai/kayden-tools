@@ -31,6 +31,7 @@ import { ExpenseForm, type ExpenseFormState } from "./ExpenseForm";
 import { useMemo, useState } from "react";
 import type { Bill, Expense } from "@/types/snap-split";
 import { useSnapSplitStore } from "@/stores/snapSplitStore";
+import { useAuthStore } from "@/stores/authStore";
 import { formatAmount, getExpenseTotal, getMemberColor, getMemberName } from "@/utils/settlement";
 import { SlideTransition } from "@/components/ui/SlideTransition";
 
@@ -55,8 +56,15 @@ interface ExpenseListProps {
 
 export function ExpenseList({ bill, isReadOnly = false, onOpenMemberDialog, onOpenItemizedExpense }: ExpenseListProps) {
     const { addExpense, updateExpense, removeExpense } = useSnapSplitStore();
+    const { user } = useAuthStore();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+    // 判斷成員是否為「離線」狀態（已認領但非當前用戶）
+    const isMemberOffline = (memberId: string) => {
+        const member = bill.members.find(m => m.id === memberId);
+        return !!member?.userId && member.userId !== user?.id;
+    };
 
     const [formOpen, setFormOpen] = useState(false);
     const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -269,12 +277,16 @@ export function ExpenseList({ bill, isReadOnly = false, onOpenMemberDialog, onOp
                                 }}
                             >
                                 <Avatar
+                                    src={bill.members.find(m => m.id === expense.paidBy)?.avatarUrl}
                                     sx={{
                                         bgcolor: getMemberColor(expense.paidBy, bill.members),
                                         width: 40,
                                         height: 40,
                                         fontSize: '1rem',
-                                        fontWeight: 600
+                                        fontWeight: 600,
+                                        // 離線效果
+                                        opacity: isMemberOffline(expense.paidBy) ? 0.6 : 1,
+                                        filter: isMemberOffline(expense.paidBy) ? 'grayscale(30%)' : 'none',
                                     }}
                                 >
                                     {getMemberName(bill.members, expense.paidBy).charAt(0).toUpperCase()}

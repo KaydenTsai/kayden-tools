@@ -1,11 +1,22 @@
 /** 帳單同步狀態 */
 export type SyncStatus = 'local' | 'synced' | 'modified' | 'syncing' | 'error';
 
+/** 協作者角色 */
+export type CollaboratorRole = 'owner' | 'collaborator' | 'viewer';
+
 export interface Member {
     id: string;
     name: string;
     /** 遠端 ID（同步後設定） */
     remoteId?: string;
+    /** 認領者的 User ID */
+    userId?: string;
+    /** 認領者的頭像 URL */
+    avatarUrl?: string;
+    /** 原始名稱（認領前的名稱，用於取消認領時還原） */
+    originalName?: string;
+    /** 認領時間 */
+    claimedAt?: string;
 }
 
 export interface ExpenseItem {
@@ -49,6 +60,12 @@ export interface Bill {
     lastSyncedAt?: string;
     /** 同步錯誤訊息 */
     syncError?: string;
+    /** 帳單擁有者 User ID */
+    ownerId?: string;
+    /** 是否為匯入的快照（與原作者斷開連結） */
+    isSnapshot?: boolean;
+    /** 快照來源（原始 shareCode 或分享者資訊） */
+    snapshotSource?: string;
 }
 
 export interface Transfer {

@@ -1,7 +1,9 @@
 using Kayden.Commons.Common;
 using KaydenTools.Core.Common;
+using KaydenTools.Core.Interfaces;
 using KaydenTools.Models.SnapSplit.Dtos;
 using KaydenTools.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace KaydenTools.Api.Controllers;
@@ -15,14 +17,15 @@ namespace KaydenTools.Api.Controllers;
 public class MembersController : ControllerBase
 {
     private readonly IMemberService _memberService;
+    private readonly ICurrentUserService _currentUserService;
 
     /// <summary>
     /// 建構子
     /// </summary>
-    /// <param name="memberService">成員服務</param>
-    public MembersController(IMemberService memberService)
+    public MembersController(IMemberService memberService, ICurrentUserService currentUserService)
     {
         _memberService = memberService;
+        _currentUserService = currentUserService;
     }
 
     /// <summary>
@@ -94,6 +97,77 @@ public class MembersController : ControllerBase
                 return Conflict(ApiResponse.Fail(result.Error.Code, result.Error.Message));
             }
             return NotFound(ApiResponse.Fail(result.Error.Code, result.Error.Message));
+        }
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// 認領成員（綁定當前使用者）
+    /// </summary>
+    /// <param name="id">成員 ID</param>
+    /// <param name="dto">認領資訊</param>
+    /// <param name="ct">取消令牌</param>
+    /// <returns>認領結果</returns>
+    [HttpPost("members/{id:guid}/claim")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponse<ClaimMemberResultDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Claim(Guid id, [FromBody] ClaimMemberDto dto, CancellationToken ct)
+    {
+        var userId = _currentUserService.UserId;
+        if (!userId.HasValue)
+        {
+            return Unauthorized(ApiResponse.Fail(ErrorCodes.Unauthorized, "User not authenticated."));
+        }
+
+        var result = await _memberService.ClaimAsync(id, userId.Value, dto, ct);
+        if (result.IsFailure)
+        {
+            return result.Error.Code switch
+            {
+                ErrorCodes.MemberNotFound => NotFound(ApiResponse.Fail(result.Error.Code, result.Error.Message)),
+                ErrorCodes.MemberAlreadyClaimed or ErrorCodes.UserAlreadyClaimedOther =>
+                    Conflict(ApiResponse.Fail(result.Error.Code, result.Error.Message)),
+                _ => BadRequest(ApiResponse.Fail(result.Error.Code, result.Error.Message))
+            };
+        }
+
+        return Ok(ApiResponse<ClaimMemberResultDto>.Ok(result.Value));
+    }
+
+    /// <summary>
+    /// 取消認領成員
+    /// </summary>
+    /// <param name="id">成員 ID</param>
+    /// <param name="ct">取消令牌</param>
+    [HttpDelete("members/{id:guid}/claim")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Unclaim(Guid id, CancellationToken ct)
+    {
+        var userId = _currentUserService.UserId;
+        if (!userId.HasValue)
+        {
+            return Unauthorized(ApiResponse.Fail(ErrorCodes.Unauthorized, "User not authenticated."));
+        }
+
+        var result = await _memberService.UnclaimAsync(id, userId.Value, ct);
+        if (result.IsFailure)
+        {
+            return result.Error.Code switch
+            {
+                ErrorCodes.MemberNotFound => NotFound(ApiResponse.Fail(result.Error.Code, result.Error.Message)),
+                ErrorCodes.UnauthorizedUnclaim => Forbid(),
+                _ => BadRequest(ApiResponse.Fail(result.Error.Code, result.Error.Message))
+            };
         }
 
         return NoContent();

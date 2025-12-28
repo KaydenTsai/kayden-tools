@@ -4,6 +4,7 @@ import { UserAvatar } from "./UserAvatar";
 import { ParticipantChip } from "./ParticipantChip";
 import type { Member } from "@/types/snap-split";
 import { getMemberColor } from "@/utils/settlement";
+import { useAuthStore } from "@/stores/authStore";
 
 export interface ExpenseFormState {
     name: string;
@@ -41,6 +42,13 @@ export function ExpenseForm({
     nameRef,
     amountRef,
 }: ExpenseFormProps) {
+    const { user } = useAuthStore();
+
+    // 判斷成員是否為「離線」狀態（已認領但非當前用戶）
+    const isMemberOffline = (member: Member) => {
+        return !!member.userId && member.userId !== user?.id;
+    };
+
     const handleToggleParticipant = (memberId: string) => {
         const current = values.participants;
         const newParticipants = current.includes(memberId)
@@ -105,9 +113,11 @@ export function ExpenseForm({
                                 key={member.id}
                                 name={member.name}
                                 color={getMemberColor(member.id, members)}
+                                avatarUrl={member.avatarUrl}
                                 selected={values.paidBy === member.id}
                                 onClick={() => onChange({ paidBy: member.id })}
                                 size={40}
+                                isOffline={isMemberOffline(member)}
                             />
                         ))}
                     </Box>
@@ -146,6 +156,7 @@ export function ExpenseForm({
                                     selected={isSelected}
                                     size="small"
                                     onClick={() => handleToggleParticipant(member.id)}
+                                    isOffline={isMemberOffline(member)}
                                 />
                             );
                         })}

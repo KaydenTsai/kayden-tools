@@ -93,14 +93,14 @@ export const useAuthStore = create<AuthState>()(
 
             logout: async () => {
                 const { refreshToken, clearAuth } = get();
-                if (refreshToken) {
-                    try {
-                        await postApiAuthLogout({ refreshToken });
-                    } catch {
-                        // Ignore logout errors
-                    }
-                }
+                // 立即清除本地狀態，不等待 API 回應 (Fire-and-Forget)
                 clearAuth();
+                // 背景呼叫 API 撤銷 token，不阻塞 UI
+                if (refreshToken) {
+                    postApiAuthLogout({ refreshToken }).catch(() => {
+                        // Ignore logout errors
+                    });
+                }
             },
 
             initialize: async () => {

@@ -2,6 +2,7 @@ import {
     Avatar,
     Box,
     Button,
+    Chip,
     Dialog,
     DialogActions,
     DialogContent,
@@ -13,6 +14,7 @@ import {
     ListItemAvatar,
     ListItemText,
     TextField,
+    Tooltip,
     Typography,
 } from "@mui/material";
 import {
@@ -20,11 +22,15 @@ import {
     Delete as DeleteIcon,
     Edit as EditIcon,
     PersonAdd as PersonAddIcon,
+    Link as LinkIcon,
+    LinkOff as UnlinkIcon,
+    CheckCircle as ClaimedIcon,
 } from "@mui/icons-material";
 import { useState } from "react";
 import type { Bill, Member } from "@/types/snap-split";
 import { SlideTransition } from "@/components/ui/SlideTransition";
 import { useSnapSplitStore } from "@/stores/snapSplitStore";
+import { useAuthStore } from "@/stores/authStore";
 import { getMemberColor } from "@/utils/settlement";
 
 interface MemberDialogProps {
@@ -35,7 +41,8 @@ interface MemberDialogProps {
 }
 
 export function MemberDialog({ bill, open, onClose, isReadOnly = false }: MemberDialogProps) {
-    const { addMember, removeMember, updateMember } = useSnapSplitStore();
+    const { addMember, removeMember, updateMember, claimMember, unclaimMember } = useSnapSplitStore();
+    const { user, isAuthenticated } = useAuthStore();
 
     const [addOpen, setAddOpen] = useState(false);
     const [newName, setNewName] = useState('');
@@ -44,6 +51,60 @@ export function MemberDialog({ bill, open, onClose, isReadOnly = false }: Member
     const [editName, setEditName] = useState('');
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [deletingMember, setDeletingMember] = useState<Member | null>(null);
+    const [claimConfirmOpen, setClaimConfirmOpen] = useState(false);
+    const [claimingMember, setClaimingMember] = useState<Member | null>(null);
+    const [unclaimConfirmOpen, setUnclaimConfirmOpen] = useState(false);
+    const [unclaimingMember, setUnclaimingMember] = useState<Member | null>(null);
+
+    // 找出當前使用者已認領的成員
+    const myClaimedMember = user?.id ? bill.members.find(m => m.userId === user.id) : undefined;
+
+    const canClaimMember = (member: Member) => {
+        // 必須已登入且有 user id
+        if (!isAuthenticated || !user?.id) return false;
+        // 成員尚未被認領
+        if (member.userId) return false;
+        // 使用者尚未認領其他成員
+        if (myClaimedMember) return false;
+        return true;
+    };
+
+    const canUnclaimMember = (member: Member) => {
+        if (!user?.id) return false;
+        // 只有認領者本人或帳單擁有者可以取消
+        return member.userId === user.id || bill.ownerId === user.id;
+    };
+
+    const handleOpenClaimConfirm = (member: Member) => {
+        setClaimingMember(member);
+        setClaimConfirmOpen(true);
+    };
+
+    const handleClaim = () => {
+        if (claimingMember && user?.id) {
+            claimMember({
+                memberId: claimingMember.id,
+                userId: user.id,
+                displayName: user.displayName ?? user.email ?? '使用者',
+                avatarUrl: user.avatarUrl ?? undefined,
+            });
+        }
+        setClaimConfirmOpen(false);
+        setClaimingMember(null);
+    };
+
+    const handleOpenUnclaimConfirm = (member: Member) => {
+        setUnclaimingMember(member);
+        setUnclaimConfirmOpen(true);
+    };
+
+    const handleUnclaim = () => {
+        if (unclaimingMember) {
+            unclaimMember(unclaimingMember.id);
+        }
+        setUnclaimConfirmOpen(false);
+        setUnclaimingMember(null);
+    };
 
     const handleAdd = () => {
         if (newName.trim()) {
@@ -116,52 +177,136 @@ export function MemberDialog({ bill, open, onClose, isReadOnly = false }: Member
                         </Box>
                     ) : (
                         <List sx={{ px: 1 }}>
-                            {bill.members.map(member => (
-                                <ListItem
-                                    key={member.id}
-                                    sx={{
-                                        borderRadius: 2,
-                                        mb: 0.5,
-                                        '&:hover': !isReadOnly ? { bgcolor: 'action.hover' } : {},
-                                    }}
-                                    secondaryAction={
-                                        !isReadOnly && (
-                                            <Box>
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => handleOpenEdit(member)}
-                                                    sx={{ mr: 0.5 }}
-                                                >
-                                                    <EditIcon fontSize="small" />
-                                                </IconButton>
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={() => handleOpenDelete(member)}
-                                                    color="error"
-                                                >
-                                                    <DeleteIcon fontSize="small" />
-                                                </IconButton>
+                            {bill.members.map(member => {
+                                const isClaimed = !!member.userId;
+                                const isMyMember = !!user?.id && member.userId === user.id;
+
+                                return (
+                                    <ListItem
+                                        key={member.id}
+                                        sx={{
+                                            borderRadius: 2,
+                                            mb: 0.5,
+                                            bgcolor: isMyMember ? 'primary.50' : undefined,
+                                            border: isMyMember ? '2px solid' : undefined,
+                                            borderColor: isMyMember ? 'primary.main' : undefined,
+                                            '&:hover': !isReadOnly ? { bgcolor: isMyMember ? 'primary.100' : 'action.hover' } : {},
+                                        }}
+                                        secondaryAction={
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                {/* 認領/取消認領按鈕 */}
+                                                {!isReadOnly && isAuthenticated && (
+                                                    isClaimed ? (
+                                                        canUnclaimMember(member) && (
+                                                            <Tooltip title="取消認領">
+                                                                <IconButton
+                                                                    size="small"
+                                                                    onClick={() => handleOpenUnclaimConfirm(member)}
+                                                                    color="warning"
+                                                                >
+                                                                    <UnlinkIcon fontSize="small" />
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                        )
+                                                    ) : (
+                                                        canClaimMember(member) && (
+                                                            <Tooltip title="這是我">
+                                                                <IconButton
+                                                                    size="small"
+                                                                    onClick={() => handleOpenClaimConfirm(member)}
+                                                                    color="primary"
+                                                                >
+                                                                    <LinkIcon fontSize="small" />
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                        )
+                                                    )
+                                                )}
+                                                {/* 編輯按鈕：只有未認領或本人可編輯 */}
+                                                {!isReadOnly && (!isClaimed || isMyMember) && (
+                                                    <Tooltip title="編輯名稱">
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleOpenEdit(member)}
+                                                        >
+                                                            <EditIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                )}
+                                                {/* 已認領但非本人：顯示鎖定提示 */}
+                                                {!isReadOnly && isClaimed && !isMyMember && (
+                                                    <Tooltip title="此成員已連結帳號，無法修改名稱">
+                                                        <Box sx={{ p: 1, display: 'flex', alignItems: 'center' }}>
+                                                            <EditIcon fontSize="small" sx={{ color: 'action.disabled' }} />
+                                                        </Box>
+                                                    </Tooltip>
+                                                )}
+                                                {/* 刪除按鈕：只有未認領的成員可刪除 */}
+                                                {!isReadOnly && !isClaimed && (
+                                                    <Tooltip title="刪除成員">
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleOpenDelete(member)}
+                                                            color="error"
+                                                        >
+                                                            <DeleteIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                )}
                                             </Box>
-                                        )
-                                    }
-                                >
-                                    <ListItemAvatar>
-                                        <Avatar
-                                            sx={{
-                                                bgcolor: getMemberColor(member.id, bill.members),
-                                                fontSize: '1rem',
-                                                fontWeight: 600
-                                            }}
-                                        >
-                                            {member.name.charAt(0).toUpperCase()}
-                                        </Avatar>
-                                    </ListItemAvatar>
-                                    <ListItemText
-                                        primary={member.name}
-                                        primaryTypographyProps={{ fontWeight: 600 }}
-                                    />
-                                </ListItem>
-                            ))}
+                                        }
+                                    >
+                                        <ListItemAvatar>
+                                            <Avatar
+                                                src={member.avatarUrl}
+                                                sx={{
+                                                    bgcolor: isClaimed ? 'primary.main' : getMemberColor(member.id, bill.members),
+                                                    fontSize: '1rem',
+                                                    fontWeight: 600,
+                                                    // 已認領但非當前用戶時，降低不透明度表示「離線」
+                                                    opacity: isClaimed && !isMyMember ? 0.6 : 1,
+                                                    filter: isClaimed && !isMyMember ? 'grayscale(30%)' : 'none',
+                                                }}
+                                            >
+                                                {member.name.charAt(0).toUpperCase()}
+                                            </Avatar>
+                                        </ListItemAvatar>
+                                        <ListItemText
+                                            primary={
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <Typography fontWeight={600}>
+                                                        {member.name}
+                                                    </Typography>
+                                                    {isMyMember && (
+                                                        <Chip
+                                                            icon={<ClaimedIcon />}
+                                                            label="我"
+                                                            size="small"
+                                                            color="primary"
+                                                            sx={{ height: 20, fontSize: '0.7rem' }}
+                                                        />
+                                                    )}
+                                                    {isClaimed && !isMyMember && (
+                                                        <Tooltip title={`已被認領`}>
+                                                            <ClaimedIcon
+                                                                sx={{
+                                                                    fontSize: 16,
+                                                                    color: 'success.main',
+                                                                }}
+                                                            />
+                                                        </Tooltip>
+                                                    )}
+                                                </Box>
+                                            }
+                                            secondary={
+                                                member.originalName && member.originalName !== member.name
+                                                    ? `(${member.originalName})`
+                                                    : undefined
+                                            }
+                                        />
+                                    </ListItem>
+                                );
+                            })}
                         </List>
                     )}
                 </DialogContent>
@@ -251,6 +396,72 @@ export function MemberDialog({ bill, open, onClose, isReadOnly = false }: Member
                     <Button onClick={() => setDeleteOpen(false)} size="large">取消</Button>
                     <Button onClick={handleDelete} color="error" variant="contained" size="large">
                         刪除
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* 認領確認對話框 */}
+            <Dialog
+                open={claimConfirmOpen}
+                onClose={() => setClaimConfirmOpen(false)}
+                TransitionComponent={SlideTransition}
+            >
+                <DialogTitle>確認認領</DialogTitle>
+                <DialogContent>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                        <Avatar
+                            src={user?.avatarUrl ?? undefined}
+                            sx={{ width: 48, height: 48 }}
+                        >
+                            {user?.displayName?.charAt(0) ?? user?.email?.charAt(0)}
+                        </Avatar>
+                        <Box>
+                            <Typography fontWeight={600}>
+                                {user?.displayName ?? user?.email}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                你的帳號
+                            </Typography>
+                        </Box>
+                    </Box>
+                    <DialogContentText>
+                        確定將成員「{claimingMember?.name}」與你的帳號綁定？
+                        <br />
+                        <Typography component="span" variant="body2" color="text.secondary">
+                            綁定後，成員名稱會更新為你的 LINE 顯示名稱。
+                        </Typography>
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions sx={{ p: 2, pt: 0 }}>
+                    <Button onClick={() => setClaimConfirmOpen(false)} size="large">取消</Button>
+                    <Button onClick={handleClaim} variant="contained" size="large" startIcon={<LinkIcon />}>
+                        確認認領
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* 取消認領確認對話框 */}
+            <Dialog
+                open={unclaimConfirmOpen}
+                onClose={() => setUnclaimConfirmOpen(false)}
+                TransitionComponent={SlideTransition}
+            >
+                <DialogTitle>取消認領</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        確定要取消認領成員「{unclaimingMember?.name}」？
+                        <br />
+                        <Typography component="span" variant="body2" color="text.secondary">
+                            取消後，成員名稱將還原為原本的名稱
+                            {unclaimingMember?.originalName && `「${unclaimingMember.originalName}」`}
+                            。
+                        </Typography>
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions sx={{ p: 2, pt: 0 }}>
+                    <Button onClick={() => setUnclaimConfirmOpen(false)} size="large">取消</Button>
+                    <Button onClick={handleUnclaim} color="warning" variant="contained" size="large" startIcon={<UnlinkIcon />}>
+                        確認取消
                     </Button>
                 </DialogActions>
             </Dialog>

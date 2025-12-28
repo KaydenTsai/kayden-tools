@@ -72,14 +72,9 @@ export function LoginDialog({ open, onClose }: LoginDialogProps) {
         }
     };
 
-    const handleLogout = async () => {
-        setIsLoading('logout');
-        try {
-            await logout();
-            onClose();
-        } finally {
-            setIsLoading(null);
-        }
+    const handleLogout = () => {
+        logout();  // 現在是即時的，不需要 await
+        onClose();
     };
 
     // Reset error when dialog opens
@@ -204,8 +199,7 @@ export function LoginDialog({ open, onClose }: LoginDialogProps) {
                         variant="outlined"
                         color="error"
                         onClick={handleLogout}
-                        disabled={isLoading !== null}
-                        startIcon={isLoading === 'logout' ? <CircularProgress size={16} /> : <LogoutIcon />}
+                        startIcon={<LogoutIcon />}
                         fullWidth
                     >
                         登出

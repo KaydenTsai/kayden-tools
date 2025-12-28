@@ -29,9 +29,18 @@ const updateCurrentBill = (
     }),
 });
 
+export interface ClaimMemberParams {
+    memberId: string;
+    userId: string;
+    displayName: string;
+    avatarUrl?: string;
+}
+
 export interface SnapSplitState {
     bills: Bill[];
     currentBillId: string | null;
+    /** Session-only: 本次瀏覽已跳過認領的帳單 ID（不持久化） */
+    skippedClaimBillIds: string[];
 
     // Bill actions
     createBill: (name: string) => void;
@@ -39,11 +48,29 @@ export interface SnapSplitState {
     selectBill: (id: string) => void;
     updateBillName: (name: string) => void;
     importBill: (bill: Bill) => string;
+    /** 從快照匯入帳單（產生新 ID，標記為快照） */
+    importBillFromSnapshot: (bill: Bill, source?: string) => string;
+    /** 設定帳單擁有者 */
+    setBillOwner: (billId: string, userId: string) => void;
 
     // Member actions
     addMember: (name: string) => void;
     removeMember: (id: string) => void;
     updateMember: (id: string, name: string) => void;
+    /** 認領成員（綁定 userId） */
+    claimMember: (params: ClaimMemberParams) => void;
+    /** 取消認領成員 */
+    unclaimMember: (memberId: string) => void;
+    /** 檢查成員是否已被認領 */
+    isMemberClaimed: (memberId: string) => boolean;
+    /** 取得當前使用者在此帳單中認領的成員 */
+    getMyClaimedMember: (userId: string) => string | null;
+
+    // Claim prompt actions
+    /** 標記帳單為已跳過認領（本次 session） */
+    skipClaimForBill: (billId: string) => void;
+    /** 檢查是否應該顯示認領提示 */
+    shouldShowClaimPrompt: (billId: string, userId: string | undefined) => boolean;
 
     // Expense actions
     addExpense: (expense: Omit<Expense, 'id'>) => void;
@@ -78,6 +105,7 @@ export const useSnapSplitStore = create<SnapSplitState>()(
         (set, get) => ({
             bills: [],
             currentBillId: null,
+            skippedClaimBillIds: [],
 
             createBill: (name) => {
                 const newBill = createDefaultBill(name);
@@ -112,6 +140,55 @@ export const useSnapSplitStore = create<SnapSplitState>()(
                 return newId;
             },
 
+            importBillFromSnapshot: (bill, source) => {
+                const newId = generateId();
+                set(state => ({
+                    bills: [...state.bills, {
+                        ...bill,
+                        id: newId,
+                        createdAt: now(),
+                        updatedAt: now(),
+                        syncStatus: 'local',
+                        isSnapshot: true,
+                        snapshotSource: source,
+                        // 清除遠端相關欄位
+                        remoteId: undefined,
+                        shareCode: undefined,
+                        lastSyncedAt: undefined,
+                        ownerId: undefined,
+                        // 清除成員的認領狀態
+                        members: bill.members.map(m => ({
+                            ...m,
+                            userId: undefined,
+                            avatarUrl: undefined,
+                            originalName: undefined,
+                            claimedAt: undefined,
+                            remoteId: undefined,
+                        })),
+                        // 清除費用的遠端 ID
+                        expenses: bill.expenses.map(e => ({
+                            ...e,
+                            remoteId: undefined,
+                            items: e.items.map(item => ({
+                                ...item,
+                                remoteId: undefined,
+                            })),
+                        })),
+                    }],
+                    currentBillId: newId,
+                }));
+                return newId;
+            },
+
+            setBillOwner: (billId, userId) => set(state => ({
+                bills: state.bills.map(bill =>
+                    bill.id === billId
+                        ? { ...bill, ownerId: userId, updatedAt: now() }
+                        : bill
+                ),
+            })),
+
+            // ===== Member Actions =====
             addMember: (name) => set(state =>
                 updateCurrentBill(state, (bill) => ({
                     members: [...bill.members, { id: generateId(), name }],
@@ -140,6 +217,87 @@ export const useSnapSplitStore = create<SnapSplitState>()(
                 }))
             ),
 
+            claimMember: ({ memberId, userId, displayName, avatarUrl }) => set(state =>
+                updateCurrentBill(state, (bill) => ({
+                    members: bill.members.map(m =>
+                        m.id === memberId
+                            ? {
+                                ...m,
+                                userId,
+                                avatarUrl,
+                                originalName: m.originalName ?? m.name,
+                                name: displayName,
+                                claimedAt: now(),
+                            }
+                            : m
+                    ),
+                }))
+            ),
+
+            unclaimMember: (memberId) => set(state =>
+                updateCurrentBill(state, (bill) => ({
+                    members: bill.members.map(m =>
+                        m.id === memberId
+                            ? {
+                                ...m,
+                                name: m.originalName ?? m.name,
+                                userId: undefined,
+                                avatarUrl: undefined,
+                                originalName: undefined,
+                                claimedAt: undefined,
+                            }
+                            : m
+                    ),
+                }))
+            ),
+
+            isMemberClaimed: (memberId) => {
+                const state = get();
+                const bill = state.bills.find(b => b.id === state.currentBillId);
+                if (!bill) return false;
+                const member = bill.members.find(m => m.id === memberId);
+                return !!member?.userId;
+            },
+
+            getMyClaimedMember: (userId) => {
+                const state = get();
+                const bill = state.bills.find(b => b.id === state.currentBillId);
+                if (!bill) return null;
+                const member = bill.members.find(m => m.userId === userId);
+                return member?.id ?? null;
+            },
+
+            // ===== Claim Prompt Actions =====
+            skipClaimForBill: (billId) => set(state => ({
+                skippedClaimBillIds: [...state.skippedClaimBillIds, billId],
+            })),
+
+            shouldShowClaimPrompt: (billId, userId) => {
+                const state = get();
+                // 必須已登入
+                if (!userId) return false;
+
+                const bill = state.bills.find(b => b.id === billId);
+                if (!bill) return false;
+
+                // 快照帳單不需要認領
+                if (bill.isSnapshot) return false;
+
+                // 本次 session 已跳過
+                if (state.skippedClaimBillIds.includes(billId)) return false;
+
+                // 使用者已在此帳單認領成員
+                const alreadyClaimed = bill.members.some(m => m.userId === userId);
+                if (alreadyClaimed) return false;
+
+                // 還有未認領的成員
+                const hasUnclaimedMembers = bill.members.some(m => !m.userId);
+                if (!hasUnclaimedMembers) return false;
+
+                return true;
+            },
+
+            // ===== Expense Actions =====
             addExpense: (expense) => set(state =>
                 updateCurrentBill(state, (bill) => ({
                     expenses: [...bill.expenses, { ...expense, id: generateId() }],
@@ -263,7 +421,14 @@ export const useSnapSplitStore = create<SnapSplitState>()(
                 );
             },
         }),
-        { name: 'kayden-tools-snap-split' }
+        {
+            name: 'kayden-tools-snap-split',
+            // 排除 session-only 狀態
+            partialize: (state) => ({
+                bills: state.bills,
+                currentBillId: state.currentBillId,
+            }),
+        }
     )
 );
 

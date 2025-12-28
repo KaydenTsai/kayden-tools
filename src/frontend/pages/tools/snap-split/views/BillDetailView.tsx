@@ -1,5 +1,6 @@
 import { ItemizedExpenseView } from "./ItemizedExpenseView";
 import {
+    Alert,
     Box,
     Button,
     Chip,
@@ -20,20 +21,26 @@ import {
 import {
     ArrowBack as ArrowBackIcon,
     Calculate as CalculateIcon,
+    CloudOff as CloudOffIcon,
     FactCheck as FactCheckIcon,
     Group as GroupIcon,
+    Login as LoginIcon,
     PersonAdd as PersonAddIcon,
     Receipt as ReceiptIcon,
     Share as ShareIcon,
+    Person as PersonIcon,
 } from "@mui/icons-material";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ExpenseList } from "../components/ExpenseList";
 import { SettlementPanel } from "../components/SettlementPanel";
 import { VerificationPanel } from "../components/VerificationPanel";
 import { MemberDialog } from "../components/MemberDialog";
 import { ShareDialog } from "@/components/dialogs/ShareDialog";
+import { ClaimPromptDialog } from "@/components/dialogs/ClaimPromptDialog";
+import { LoginDialog } from "@/components/dialogs/LoginDialog";
 import { SyncStatusIcon } from "@/components/ui/SyncStatusIndicator";
 import { useSnapSplitStore } from "@/stores/snapSplitStore";
+import { useAuthStore } from "@/stores/authStore";
 import type { Bill } from "@/types/snap-split";
 import { formatAmount, getExpenseTotal } from "@/utils/settlement";
 import { SlideTransition } from "@/components/ui/SlideTransition";
@@ -46,17 +53,64 @@ interface BillDetailViewProps {
 }
 
 export function BillDetailView({ bill, onBack, isReadOnly = false, isAuthenticated = false }: BillDetailViewProps) {
-    const { updateBillName } = useSnapSplitStore();
+    const { updateBillName, shouldShowClaimPrompt, skipClaimForBill, skippedClaimBillIds } = useSnapSplitStore();
+    const { user } = useAuthStore();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-    const [tabIndex, setTabIndex] = useState(isReadOnly ? 2 : 0);
+    // 協作模式鎖定：任何成員已綁定帳號 → 需要登入才能操作
+    const isCollaborative = bill.members.some(m => !!m.userId);
+    const isCloudLocked = isCollaborative && !isAuthenticated;
+    // 有效唯讀狀態：原本的 isReadOnly 或雲端鎖定
+    const effectiveReadOnly = isReadOnly || isCloudLocked;
+
+    const [tabIndex, setTabIndex] = useState(effectiveReadOnly ? 2 : 0);
     const [memberDialogOpen, setMemberDialogOpen] = useState(false);
     const [shareDialogOpen, setShareDialogOpen] = useState(false);
     const [itemizedExpenseOpen, setItemizedExpenseOpen] = useState(false);
     const [editingExpenseId, setEditingExpenseId] = useState<string | undefined>(undefined);
     const [editNameOpen, setEditNameOpen] = useState(false);
     const [editName, setEditName] = useState(bill.name);
+    const [claimPromptOpen, setClaimPromptOpen] = useState(false);
+    const [loginDialogOpen, setLoginDialogOpen] = useState(false);
+
+    // 檢查是否應該顯示認領提示
+    const showClaimPrompt = !effectiveReadOnly && shouldShowClaimPrompt(bill.id, user?.id);
+    // 是否已跳過但應該顯示提醒 banner
+    const showClaimReminder = !effectiveReadOnly &&
+        isAuthenticated &&
+        user?.id &&
+        !bill.isSnapshot &&
+        skippedClaimBillIds.includes(bill.id) &&
+        !bill.members.some(m => m.userId === user.id) &&
+        bill.members.some(m => !m.userId);
+
+    // 格式化最後同步時間
+    const formatLastSyncTime = (dateStr?: string) => {
+        if (!dateStr) return null;
+        const date = new Date(dateStr);
+        return date.toLocaleString('zh-TW', {
+            month: 'numeric',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    };
+
+    // 進入帳單時自動彈出認領提示
+    useEffect(() => {
+        if (showClaimPrompt && !claimPromptOpen) {
+            // 延遲一下再顯示，讓頁面先載入
+            const timer = setTimeout(() => {
+                setClaimPromptOpen(true);
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    }, [showClaimPrompt]);
+
+    const handleSkipClaim = () => {
+        skipClaimForBill(bill.id);
+    };
 
     const handleSaveEditName = () => {
         if (editName.trim()) {
@@ -124,15 +178,15 @@ export function BillDetailView({ bill, onBack, isReadOnly = false, isAuthenticat
                                 variant="h6"
                                 fontWeight={700}
                                 noWrap
-                                onClick={isReadOnly ? undefined : () => { setEditName(bill.name); setEditNameOpen(true); }}
-                                sx={isReadOnly ? undefined : {
+                                onClick={effectiveReadOnly ? undefined : () => { setEditName(bill.name); setEditNameOpen(true); }}
+                                sx={effectiveReadOnly ? undefined : {
                                     cursor: 'pointer',
                                     '&:hover': { color: 'primary.main' },
                                 }}
                             >
                                 {bill.name}
                             </Typography>
-                            <SyncStatusIcon status={bill.syncStatus} size="small" />
+                            <SyncStatusIcon status={bill.syncStatus} size="small" isCollaborative={isCollaborative} />
                         </Box>
                         <Typography variant="body2" color="text.secondary">
                             {bill.expenses.length} 筆消費 · 總計 {formatAmount(totalAmount)}
@@ -162,7 +216,7 @@ export function BillDetailView({ bill, onBack, isReadOnly = false, isAuthenticat
                                 },
                             }}
                         />
-                    ) : !isReadOnly && (
+                    ) : !effectiveReadOnly && (
                         <Chip
                             icon={<PersonAddIcon />}
                             label="新增成員"
@@ -180,7 +234,7 @@ export function BillDetailView({ bill, onBack, isReadOnly = false, isAuthenticat
                             }}
                         />
                     )}
-                    {!isReadOnly && (
+                    {!effectiveReadOnly && (
                         <IconButton
                             onClick={() => setShareDialogOpen(true)}
                             sx={{
@@ -227,11 +281,58 @@ export function BillDetailView({ bill, onBack, isReadOnly = false, isAuthenticat
                 )}
             </Paper>
 
+            {/* 協作模式鎖定提示 */}
+            {isCloudLocked && (
+                <Alert
+                    severity="warning"
+                    icon={<CloudOffIcon />}
+                    action={
+                        <Button
+                            color="inherit"
+                            size="small"
+                            startIcon={<LoginIcon />}
+                            onClick={() => setLoginDialogOpen(true)}
+                        >
+                            登入
+                        </Button>
+                    }
+                    sx={{ mb: 2, mx: 0.5, borderRadius: 2 }}
+                >
+                    <Typography variant="body2" fontWeight={600}>
+                        此帳單有多人協作，登入後才能查看最新紀錄及編輯
+                    </Typography>
+                    {formatLastSyncTime(bill.updatedAt) && (
+                        <Typography variant="caption" color="text.secondary">
+                            目前顯示的是 {formatLastSyncTime(bill.updatedAt)} 的紀錄
+                        </Typography>
+                    )}
+                </Alert>
+            )}
+
+            {showClaimReminder && (
+                <Alert
+                    severity="info"
+                    icon={<PersonIcon />}
+                    action={
+                        <Button
+                            color="inherit"
+                            size="small"
+                            onClick={() => setClaimPromptOpen(true)}
+                        >
+                            認領身分
+                        </Button>
+                    }
+                    sx={{ mb: 2, mx: 0.5, borderRadius: 2 }}
+                >
+                    尚未認領您的身分，認領後可同步您的帳單資料
+                </Alert>
+            )}
+
             <Stack spacing={2} sx={{ px: 0.5 }}>
                 {tabIndex === 0 && (
                     <ExpenseList
                         bill={bill}
-                        isReadOnly={isReadOnly}
+                        isReadOnly={effectiveReadOnly}
                         onOpenMemberDialog={() => setMemberDialogOpen(true)}
                         onOpenItemizedExpense={handleOpenItemizedExpense}
                     />
@@ -242,7 +343,7 @@ export function BillDetailView({ bill, onBack, isReadOnly = false, isAuthenticat
                 )}
 
                 {tabIndex === 2 && (
-                    <SettlementPanel bill={bill} isReadOnly={isReadOnly} />
+                    <SettlementPanel bill={bill} isReadOnly={effectiveReadOnly} />
                 )}
             </Stack>
 
@@ -331,7 +432,7 @@ export function BillDetailView({ bill, onBack, isReadOnly = false, isAuthenticat
                 bill={bill}
                 open={memberDialogOpen}
                 onClose={() => setMemberDialogOpen(false)}
-                isReadOnly={isReadOnly}
+                isReadOnly={effectiveReadOnly}
             />
 
             <ShareDialog
@@ -366,6 +467,18 @@ export function BillDetailView({ bill, onBack, isReadOnly = false, isAuthenticat
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            <ClaimPromptDialog
+                bill={bill}
+                open={claimPromptOpen}
+                onClose={() => setClaimPromptOpen(false)}
+                onSkip={handleSkipClaim}
+            />
+
+            <LoginDialog
+                open={loginDialogOpen}
+                onClose={() => setLoginDialogOpen(false)}
+            />
         </Box>
     );
 }

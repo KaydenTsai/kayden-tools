@@ -17,6 +17,7 @@ import {
 } from "@mui/icons-material";
 import { useMemo, useState } from "react";
 import type { Bill } from "@/types/snap-split";
+import { useAuthStore } from "@/stores/authStore";
 import {
     calculateSettlement,
     formatAmount,
@@ -64,7 +65,14 @@ interface VerificationPanelProps {
 }
 
 export function VerificationPanel({ bill }: VerificationPanelProps) {
+    const { user } = useAuthStore();
     const [expandedMember, setExpandedMember] = useState<string | false>(false);
+
+    // 判斷成員是否為「離線」狀態（已認領但非當前用戶）
+    const isMemberOffline = (memberId: string) => {
+        const member = bill.members.find(m => m.id === memberId);
+        return !!member?.userId && member.userId !== user?.id;
+    };
 
     const memberDetails = useMemo(() => {
         if (bill.expenses.length === 0) {
@@ -223,12 +231,15 @@ export function VerificationPanel({ bill }: VerificationPanelProps) {
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', pr: 1 }}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                                         <Avatar
+                                            src={bill.members.find(m => m.id === member.memberId)?.avatarUrl}
                                             sx={{
                                                 bgcolor: getMemberColor(member.memberId, bill.members),
                                                 width: 32,
                                                 height: 32,
                                                 fontSize: '0.875rem',
-                                                fontWeight: 600
+                                                fontWeight: 600,
+                                                opacity: isMemberOffline(member.memberId) ? 0.6 : 1,
+                                                filter: isMemberOffline(member.memberId) ? 'grayscale(30%)' : 'none',
                                             }}
                                         >
                                             {member.memberName.charAt(0).toUpperCase()}

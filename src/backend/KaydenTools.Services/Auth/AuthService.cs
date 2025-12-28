@@ -87,7 +87,7 @@ public class AuthService : IAuthService
 
             user.DisplayName = profile.DisplayName;
             user.LinePictureUrl = profile.PictureUrl;
-            user.AvatarUrl ??= profile.PictureUrl;
+            user.AvatarUrl = profile.PictureUrl;
             user.UpdatedAt = _dateTimeService.UtcNow;
             _unitOfWork.Users.Update(user);
         }
@@ -162,7 +162,7 @@ public class AuthService : IAuthService
 
             user.DisplayName = userInfo.Name ?? user.DisplayName;
             user.GooglePictureUrl = userInfo.Picture;
-            user.AvatarUrl ??= userInfo.Picture;
+            user.AvatarUrl = userInfo.Picture;
             user.UpdatedAt = _dateTimeService.UtcNow;
             _unitOfWork.Users.Update(user);
         }
