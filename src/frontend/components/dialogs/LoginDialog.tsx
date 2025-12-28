@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     Dialog,
     DialogTitle,
@@ -36,6 +36,9 @@ export function LoginDialog({ open, onClose }: LoginDialogProps) {
     const [isLoading, setIsLoading] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
+    // 防止重複點擊（ref 比 state 更即時）
+    const loginInProgress = useRef(false);
+
     const { data: providersData, isLoading: isLoadingProviders } = useGetApiAuthProviders({
         query: { enabled: open },
     });
@@ -43,8 +46,17 @@ export function LoginDialog({ open, onClose }: LoginDialogProps) {
     const providers = providersData?.data as { line?: boolean; google?: boolean } | undefined;
 
     const handleLogin = async (provider: 'line' | 'google') => {
+        // 雙重保護：ref 檢查（即時）+ state 檢查（UI 更新）
+        if (loginInProgress.current || isLoading) {
+            console.warn('[Login] Login already in progress, ignoring click');
+            return;
+        }
+        loginInProgress.current = true;
         setIsLoading(provider);
         setError(null);
+
+        // 先清除任何舊的 state，避免殘留導致驗證失敗
+        localStorage.removeItem('oauth_state');
 
         try {
             let response;
@@ -56,9 +68,13 @@ export function LoginDialog({ open, onClose }: LoginDialogProps) {
 
             const data = response.data as { url?: string; state?: string } | undefined;
             if (data?.url) {
-                // Store state for CSRF validation
+                // Store state for CSRF validation (use localStorage for cross-tab support)
                 if (data.state) {
-                    sessionStorage.setItem('oauth_state', data.state);
+                    localStorage.setItem('oauth_state', data.state);
+                    // Debug: 確認存入的值
+                    if (import.meta.env.DEV) {
+                        console.log('[Login] Stored oauth_state:', data.state);
+                    }
                 }
                 // Redirect to OAuth provider
                 window.location.href = data.url;
@@ -69,18 +85,22 @@ export function LoginDialog({ open, onClose }: LoginDialogProps) {
             setError('Login failed. Please try again.');
         } finally {
             setIsLoading(null);
+            loginInProgress.current = false;
         }
     };
 
     const handleLogout = () => {
+        // 清除 OAuth state 避免下次登入時衝突
+        localStorage.removeItem('oauth_state');
         logout();  // 現在是即時的，不需要 await
         onClose();
     };
 
-    // Reset error when dialog opens
+    // Reset state when dialog opens/closes
     useEffect(() => {
         if (open) {
             setError(null);
+            loginInProgress.current = false;
         }
     }, [open]);
 
