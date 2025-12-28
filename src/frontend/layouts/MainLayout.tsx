@@ -41,6 +41,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { tools } from '@/utils/tools';
 import { categoryLabels, type ToolCategory } from '@/types/tool';
 import { useAuthHandshake } from '@/hooks/useLoginHandshake';
+import { useAutoSync } from '@/hooks/useAutoSync';
 import { SyncHandshakeDialog } from '@/components/dialogs/SyncHandshakeDialog';
 import { LoginDialog } from '@/components/dialogs/LoginDialog';
 
@@ -97,6 +98,9 @@ export function MainLayout() {
     syncSelectedBills,
     syncAllBills,
   } = useAuthHandshake(isAuthenticated);
+
+  // 自動同步已修改的雲端帳單
+  useAutoSync(isAuthenticated);
 
   const toggleCategory = (category: ToolCategory) => {
     setExpandedCategories(prev => ({ ...prev, [category]: !prev[category] }));
