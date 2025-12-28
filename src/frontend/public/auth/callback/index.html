@@ -8,12 +8,17 @@
   <p>Redirecting...</p>
   <script>
     (function() {
-      // 安全性由 LINE Callback URL 設定 + state 驗證提供
-      var params = new URLSearchParams(window.location.search);
-      var code = params.get('code');
-      var state = params.get('state');
-      var error = params.get('error');
-      var errorDescription = params.get('error_description');
+      // 手動解析 query string，避免 URLSearchParams 把 + 解碼成空格
+      function getQueryParam(name) {
+        var regex = new RegExp('[?&]' + name + '=([^&#]*)');
+        var match = regex.exec(window.location.search);
+        return match ? decodeURIComponent(match[1].replace(/\+/g, '%2B')) : null;
+      }
+
+      var code = getQueryParam('code');
+      var state = getQueryParam('state');
+      var error = getQueryParam('error');
+      var errorDescription = getQueryParam('error_description');
 
       var targetUrl;
       if (error) {

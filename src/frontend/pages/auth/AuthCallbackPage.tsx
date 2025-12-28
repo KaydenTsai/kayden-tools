@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Box, CircularProgress, Typography, Alert, Button, Paper } from '@mui/material';
 import { useAuthStore } from '@/stores/authStore';
@@ -7,6 +7,14 @@ import {
     postApiAuthGoogleCallback,
 } from '@/api';
 
+/**
+ * OAuth 回調頁面
+ *
+ * 處理 LINE/Google 登入後的回調，驗證 state 參數防止 CSRF 攻擊。
+ *
+ * 注意：URL query string 中的 `+` 會被 URLSearchParams 解析為空格，
+ * 這是 HTML form encoding 的標準行為。因此在比對 state 時需要將空格還原為 `+`。
+ */
 export function AuthCallbackPage() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -14,9 +22,14 @@ export function AuthCallbackPage() {
     const [error, setError] = useState<string | null>(null);
     const [isProcessing, setIsProcessing] = useState(true);
 
+    // 防止 React Strict Mode 二次執行
+    const initialized = useRef(false);
+
     useEffect(() => {
+        if (initialized.current) return;
+        initialized.current = true;
+
         const handleCallback = async () => {
-            // 檢查是否有錯誤（使用者取消授權等）
             const errorParam = searchParams.get('error');
             const errorDescription = searchParams.get('error_description');
             if (errorParam) {
@@ -28,7 +41,18 @@ export function AuthCallbackPage() {
             }
 
             const code = searchParams.get('code');
-            const state = searchParams.get('state');
+
+            // 從 hash query string 取得 state，並將空格還原為 +
+            // (URLSearchParams 會將 + 解析為空格，需要還原以正確比對)
+            const state = (() => {
+                const hashQuery = window.location.hash.split('?')[1] || '';
+                const match = hashQuery.match(/state=([^&#]*)/);
+                if (match) {
+                    return decodeURIComponent(match[1]).replace(/ /g, '+');
+                }
+                return searchParams.get('state')?.replace(/ /g, '+') || null;
+            })();
+
             const provider = searchParams.get('provider') || detectProvider();
 
             if (!code) {
@@ -37,14 +61,17 @@ export function AuthCallbackPage() {
                 return;
             }
 
-            // 驗證 state 防止 CSRF 攻擊
-            const savedState = sessionStorage.getItem('oauth_state');
-            if (savedState && state !== savedState) {
-                setError('安全驗證失敗，請重新登入');
+            // CSRF 驗證：比對 localStorage 中的 state
+            const savedState = localStorage.getItem('oauth_state');
+            localStorage.removeItem('oauth_state'); // 確保只能使用一次
+
+            if (!savedState) {
+                // 無儲存的 state（可能是瀏覽器切換），仍嘗試後端驗證
+            } else if (state && savedState !== state) {
+                setError('安全驗證失敗，可能是重複點擊或瀏覽器切換導致。請重新登入。');
                 setIsProcessing(false);
                 return;
             }
-            sessionStorage.removeItem('oauth_state');
 
             try {
                 let response;
@@ -74,7 +101,6 @@ export function AuthCallbackPage() {
         handleCallback();
     }, [searchParams, setAuth, navigate]);
 
-    // Try to detect provider from the callback URL pattern
     function detectProvider(): string {
         const pathname = window.location.pathname;
         if (pathname.includes('google')) return 'google';
