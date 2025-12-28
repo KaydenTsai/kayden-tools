@@ -28,6 +28,8 @@ function billToSyncRequest(bill: Bill): SyncBillRequestDto {
             remoteId: m.remoteId ?? undefined,
             name: m.name,
             displayOrder: index,
+            linkedUserId: m.userId,
+            claimedAt: m.claimedAt,
         })),
         expenses: bill.expenses.map(e => ({
             localId: e.id,
