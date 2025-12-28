@@ -92,6 +92,8 @@ export interface SnapSplitState {
     applyIdMappings: (billId: string, mappings: IdMappings) => void;
     markBillAsSynced: (billId: string) => void;
     getUnsyncedBills: () => Bill[];
+    /** 從遠端批次匯入帳單（跳過已存在的，不改變 currentBillId） */
+    importBillsFromRemote: (bills: Bill[]) => number;
 }
 
 export interface IdMappings {
@@ -188,7 +190,6 @@ export const useSnapSplitStore = create<SnapSplitState>()(
                 ),
             })),
 
-            // ===== Member Actions =====
             addMember: (name) => set(state =>
                 updateCurrentBill(state, (bill) => ({
                     members: [...bill.members, { id: generateId(), name }],
@@ -267,7 +268,6 @@ export const useSnapSplitStore = create<SnapSplitState>()(
                 return member?.id ?? null;
             },
 
-            // ===== Claim Prompt Actions =====
             skipClaimForBill: (billId) => set(state => ({
                 skippedClaimBillIds: [...state.skippedClaimBillIds, billId],
             })),
@@ -297,7 +297,6 @@ export const useSnapSplitStore = create<SnapSplitState>()(
                 return true;
             },
 
-            // ===== Expense Actions =====
             addExpense: (expense) => set(state =>
                 updateCurrentBill(state, (bill) => ({
                     expenses: [...bill.expenses, { ...expense, id: generateId() }],
@@ -419,6 +418,54 @@ export const useSnapSplitStore = create<SnapSplitState>()(
                 return get().bills.filter(
                     bill => bill.syncStatus === 'local' || bill.syncStatus === 'modified'
                 );
+            },
+
+            importBillsFromRemote: (remoteBills) => {
+                let addedCount = 0;
+                let updatedCount = 0;
+
+                set(state => {
+                    const currentBills = [...state.bills];
+                    const newBills: Bill[] = [];
+                    let hasChanges = false;
+
+                    for (const remoteBill of remoteBills) {
+                        const index = currentBills.findIndex(local => local.remoteId === remoteBill.remoteId);
+
+                        if (index === -1 && remoteBill.remoteId) {
+                            // 來自遠端的新帳單
+                            newBills.push({
+                                ...remoteBill,
+                                id: generateId(),
+                                createdAt: remoteBill.createdAt || now(),
+                                updatedAt: remoteBill.updatedAt || now(),
+                            });
+                            addedCount++;
+                            hasChanges = true;
+                        } else if (index !== -1) {
+                            const localBill = currentBills[index];
+                            // 如果本地沒有修改，或者我們想要強制刷新認領狀態，則更新現有帳單
+                            // 目前如果已經是 'synced' 狀態，我們可以安全地用遠端狀態刷新它
+                            if (localBill.syncStatus === 'synced') {
+                                currentBills[index] = {
+                                    ...remoteBill,
+                                    id: localBill.id, // 保留我們內部的本地 ID
+                                    syncStatus: 'synced',
+                                };
+                                updatedCount++;
+                                hasChanges = true;
+                            }
+                        }
+                    }
+
+                    if (!hasChanges) return state;
+
+                    return {
+                        bills: [...currentBills, ...newBills],
+                    };
+                });
+
+                return addedCount + updatedCount;
             },
         }),
         {

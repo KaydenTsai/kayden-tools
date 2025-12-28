@@ -19,6 +19,8 @@ export interface SyncMemberDto {
     remoteId?: string;
     name: string;
     displayOrder: number;
+    linkedUserId?: string;
+    claimedAt?: string;
 }
 
 /** 同步費用 DTO */
@@ -70,6 +72,10 @@ export function billDtoToBill(dto: BillDto, syncStatus: SyncStatus = 'synced'): 
             id: m.id ?? crypto.randomUUID(),
             name: m.name ?? '',
             remoteId: m.id,
+            userId: m.linkedUserId ?? undefined,
+            avatarUrl: m.linkedUserAvatarUrl ?? undefined,
+            originalName: m.originalName ?? undefined,
+            claimedAt: m.claimedAt ?? undefined,
         })),
         expenses: expenses.map(e => ({
             id: e.id ?? crypto.randomUUID(),
@@ -112,6 +118,8 @@ export function billToSyncRequest(bill: Bill): SyncBillRequestDto {
             remoteId: m.remoteId,
             name: m.name,
             displayOrder: index,
+            linkedUserId: m.userId,
+            claimedAt: m.claimedAt,
         })),
         expenses: bill.expenses.map(e => ({
             localId: e.id,
