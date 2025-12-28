@@ -24,6 +24,7 @@ import type {
 import type {
   ApiResponse,
   BillDtoApiResponse,
+  BillDtoIReadOnlyListApiResponse,
   CreateBillDto,
   ObjectApiResponse,
   SyncBillRequestDto,
@@ -478,6 +479,149 @@ export function useGetApiBillsShareShareCode<
     shareCode,
     options,
   );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey;
+
+  return query;
+}
+
+/**
+ * @summary 取得當前使用者參與的帳單
+ */
+export const getApiBillsMine = (signal?: AbortSignal) => {
+  return axiosInstance<BillDtoIReadOnlyListApiResponse>({
+    url: `/api/Bills/mine`,
+    method: "GET",
+    signal,
+  });
+};
+
+export const getGetApiBillsMineQueryKey = () => {
+  return [`/api/Bills/mine`] as const;
+};
+
+export const getGetApiBillsMineQueryOptions = <
+  TData = Awaited<ReturnType<typeof getApiBillsMine>>,
+  TError = ApiResponse,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<Awaited<ReturnType<typeof getApiBillsMine>>, TError, TData>
+  >;
+}) => {
+  const { query: queryOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetApiBillsMineQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getApiBillsMine>>> = ({
+    signal,
+  }) => getApiBillsMine(signal);
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getApiBillsMine>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type GetApiBillsMineQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getApiBillsMine>>
+>;
+export type GetApiBillsMineQueryError = ApiResponse;
+
+export function useGetApiBillsMine<
+  TData = Awaited<ReturnType<typeof getApiBillsMine>>,
+  TError = ApiResponse,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getApiBillsMine>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getApiBillsMine>>,
+          TError,
+          Awaited<ReturnType<typeof getApiBillsMine>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetApiBillsMine<
+  TData = Awaited<ReturnType<typeof getApiBillsMine>>,
+  TError = ApiResponse,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getApiBillsMine>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getApiBillsMine>>,
+          TError,
+          Awaited<ReturnType<typeof getApiBillsMine>>
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetApiBillsMine<
+  TData = Awaited<ReturnType<typeof getApiBillsMine>>,
+  TError = ApiResponse,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getApiBillsMine>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary 取得當前使用者參與的帳單
+ */
+
+export function useGetApiBillsMine<
+  TData = Awaited<ReturnType<typeof getApiBillsMine>>,
+  TError = ApiResponse,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getApiBillsMine>>,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions = getGetApiBillsMineQueryOptions(options);
 
   const query = useQuery(queryOptions, queryClient) as UseQueryResult<
     TData,

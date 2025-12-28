@@ -62,7 +62,17 @@ public record SyncMemberDto(
     /// <summary>
     /// 顯示順序
     /// </summary>
-    int DisplayOrder
+    int DisplayOrder,
+
+    /// <summary>
+    /// 關聯的使用者 ID
+    /// </summary>
+    Guid? LinkedUserId = null,
+
+    /// <summary>
+    /// 認領時間
+    /// </summary>
+    DateTime? ClaimedAt = null
 );
 
 /// <summary>

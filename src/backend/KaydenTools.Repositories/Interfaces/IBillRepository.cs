@@ -27,4 +27,11 @@ public interface IBillRepository : IRepository<Bill>
     /// <param name="ownerId">擁有者 ID</param>
     /// <param name="ct">取消令牌</param>
     Task<IReadOnlyList<Bill>> GetByOwnerIdAsync(Guid ownerId, CancellationToken ct = default);
+
+    /// <summary>
+    /// 取得使用者參與的所有帳單（透過 Member.LinkedUserId）
+    /// </summary>
+    /// <param name="userId">使用者 ID</param>
+    /// <param name="ct">取消令牌</param>
+    Task<IReadOnlyList<Bill>> GetByLinkedUserIdAsync(Guid userId, CancellationToken ct = default);
 }

@@ -56,6 +56,13 @@ public class BillService : IBillService
         return summaries;
     }
 
+    public async Task<Result<IReadOnlyList<BillDto>>> GetByLinkedUserIdAsync(Guid userId, CancellationToken ct = default)
+    {
+        var bills = await _unitOfWork.Bills.GetByLinkedUserIdAsync(userId, ct);
+
+        return bills.Select(MapToBillDto).ToList();
+    }
+
     public async Task<Result<BillDto>> CreateAsync(CreateBillDto dto, Guid? ownerId, CancellationToken ct = default)
     {
         var bill = new Bill
@@ -166,6 +173,8 @@ public class BillService : IBillService
                 member = bill.Members.First(m => m.Id == memberDto.RemoteId.Value);
                 member.Name = memberDto.Name;
                 member.DisplayOrder = memberDto.DisplayOrder;
+                member.LinkedUserId = memberDto.LinkedUserId;
+                member.ClaimedAt = memberDto.ClaimedAt;
                 syncedMemberRemoteIds.Add(member.Id);
             }
             else
@@ -175,7 +184,9 @@ public class BillService : IBillService
                     Id = Guid.NewGuid(),
                     BillId = bill.Id,
                     Name = memberDto.Name,
-                    DisplayOrder = memberDto.DisplayOrder
+                    DisplayOrder = memberDto.DisplayOrder,
+                    LinkedUserId = memberDto.LinkedUserId,
+                    ClaimedAt = memberDto.ClaimedAt
                 };
                 bill.Members.Add(member);
             }

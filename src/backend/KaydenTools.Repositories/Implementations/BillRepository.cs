@@ -43,4 +43,20 @@ public class BillRepository : Repository<Bill>, IBillRepository
             .OrderByDescending(b => b.UpdatedAt ?? b.CreatedAt)
             .ToListAsync(ct);
     }
+
+    public async Task<IReadOnlyList<Bill>> GetByLinkedUserIdAsync(Guid userId, CancellationToken ct = default)
+    {
+        return await DbSet
+            .Include(b => b.Members.OrderBy(m => m.DisplayOrder))
+                .ThenInclude(m => m.LinkedUser)
+            .Include(b => b.Expenses.OrderByDescending(e => e.CreatedAt))
+                .ThenInclude(e => e.Participants)
+            .Include(b => b.Expenses)
+                .ThenInclude(e => e.Items)
+                    .ThenInclude(i => i.Participants)
+            .Include(b => b.Settlements)
+            .Where(b => b.Members.Any(m => m.LinkedUserId == userId) || b.OwnerId == userId)
+            .OrderByDescending(b => b.UpdatedAt ?? b.CreatedAt)
+            .ToListAsync(ct);
+    }
 }

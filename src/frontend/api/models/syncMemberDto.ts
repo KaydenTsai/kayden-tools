@@ -14,4 +14,8 @@ export interface SyncMemberDto {
   /** @nullable */
   name?: string | null;
   displayOrder?: number;
+  /** @nullable */
+  linkedUserId?: string | null;
+  /** @nullable */
+  claimedAt?: string | null;
 }

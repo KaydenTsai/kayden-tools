@@ -30,6 +30,13 @@ public interface IBillService
     Task<Result<IReadOnlyList<BillSummaryDto>>> GetByOwnerIdAsync(Guid ownerId, CancellationToken ct = default);
 
     /// <summary>
+    /// 取得使用者參與的所有帳單（透過成員認領）
+    /// </summary>
+    /// <param name="userId">使用者 ID</param>
+    /// <param name="ct">取消令牌</param>
+    Task<Result<IReadOnlyList<BillDto>>> GetByLinkedUserIdAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>
     /// 建立帳單
     /// </summary>
     /// <param name="dto">建立資料</param>

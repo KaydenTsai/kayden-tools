@@ -3,6 +3,7 @@ using KaydenTools.Core.Common;
 using KaydenTools.Core.Interfaces;
 using KaydenTools.Models.SnapSplit.Dtos;
 using KaydenTools.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace KaydenTools.Api.Controllers;
@@ -62,6 +63,28 @@ public class BillsController : ControllerBase
         }
 
         return Ok(ApiResponse<BillDto>.Ok(result.Value));
+    }
+
+    /// <summary>
+    /// 取得當前使用者參與的帳單
+    /// </summary>
+    /// <param name="ct">取消令牌</param>
+    /// <returns>帳單列表</returns>
+    [HttpGet("mine")]
+    [Authorize]
+    [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<BillDto>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetMyBills(CancellationToken ct)
+    {
+
+        var userId = _currentUserService.UserId;
+        if (!userId.HasValue)
+        {
+            return Unauthorized(ApiResponse.Fail(ErrorCodes.Unauthorized, "User not authenticated."));
+        }
+
+        var result = await _billService.GetByLinkedUserIdAsync(userId.Value, ct);
+        return Ok(ApiResponse<IReadOnlyList<BillDto>>.Ok(result.Value));
     }
 
     /// <summary>

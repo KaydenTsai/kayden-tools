@@ -12,6 +12,7 @@ export * from "./authResultDto";
 export * from "./authResultDtoApiResponse";
 export * from "./billDto";
 export * from "./billDtoApiResponse";
+export * from "./billDtoIReadOnlyListApiResponse";
 export * from "./claimMemberDto";
 export * from "./claimMemberResultDto";
 export * from "./claimMemberResultDtoApiResponse";
