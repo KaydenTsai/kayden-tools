@@ -40,7 +40,8 @@ public class BillService : IBillService
         return MapToBillDto(bill);
     }
 
-    public async Task<Result<IReadOnlyList<BillSummaryDto>>> GetByOwnerIdAsync(Guid ownerId, CancellationToken ct = default)
+    public async Task<Result<IReadOnlyList<BillSummaryDto>>> GetByOwnerIdAsync(Guid ownerId,
+        CancellationToken ct = default)
     {
         var bills = await _unitOfWork.Bills.GetByOwnerIdAsync(ownerId, ct);
 
@@ -56,7 +57,8 @@ public class BillService : IBillService
         return summaries;
     }
 
-    public async Task<Result<IReadOnlyList<BillDto>>> GetByLinkedUserIdAsync(Guid userId, CancellationToken ct = default)
+    public async Task<Result<IReadOnlyList<BillDto>>> GetByLinkedUserIdAsync(Guid userId,
+        CancellationToken ct = default)
     {
         var bills = await _unitOfWork.Bills.GetByLinkedUserIdAsync(userId, ct);
 
@@ -127,6 +129,13 @@ public class BillService : IBillService
         return bill.ShareCode;
     }
 
+    /// <summary>
+    /// 同步帳單資料（支援增量更新、樂觀鎖與明確刪除）
+    /// </summary>
+    /// <param name="dto">同步請求資料</param>
+    /// <param name="ownerId">當前使用者 ID</param>
+    /// <param name="ct">取消令牌</param>
+    /// <returns>同步結果</returns>
     public async Task<Result<SyncBillResponseDto>> SyncBillAsync(
         SyncBillRequestDto dto,
         Guid? ownerId,
@@ -137,7 +146,7 @@ public class BillService : IBillService
         var expenseIdMappings = new Dictionary<string, Guid>();
         var expenseItemIdMappings = new Dictionary<string, Guid>();
 
-        // 1. 建立或取得帳單
+        // 1. 建立或取得帳單並檢查版本
         if (dto.RemoteId.HasValue)
         {
             var existing = await _unitOfWork.Bills.GetByIdWithDetailsAsync(dto.RemoteId.Value, ct);
@@ -146,36 +155,78 @@ public class BillService : IBillService
                 return Result.Failure<SyncBillResponseDto>(ErrorCodes.BillNotFound, "Bill not found.");
             }
 
+            // 樂觀鎖檢查：如果前端基底版本不等於資料庫版本，則發生衝突
+            if (dto.BaseVersion != existing.Version)
+            {
+                return Result.Success(new SyncBillResponseDto(
+                    existing.Id,
+                    existing.Version,
+                    existing.ShareCode,
+                    new SyncIdMappingsDto(new(), new(), new()),
+                    DateTime.UtcNow,
+                    MapToBillDto(existing) // 回傳最新資料供前端合併
+                ));
+            }
+
             bill = existing;
-            bill.Name = dto.Name;
+            if (!string.IsNullOrEmpty(dto.Name))
+            {
+                bill.Name = dto.Name;
+            }
+
+            // 核心補強：先載入資料庫中現有的所有成員到 Mapping 表中
+            // 這樣即便前端這次沒傳送該成員的更新，費用的關聯 (PaidBy, Participants) 也能找得到人
+            foreach (var m in bill.Members)
+            {
+                // 我們需要知道這個成員對應前端的 LocalId
+                // 但後端其實不知道 LocalId。這是一個問題。
+                // 方案：前端在同步費用時，傳送的 PaidByLocalId 若已經是 GUID 格式，
+                // 代表它已經是 RemoteId。
+            }
         }
         else
         {
+            // 首次上傳
             bill = new Bill
             {
                 Id = Guid.NewGuid(),
-                Name = dto.Name,
+                Name = dto.Name ?? "New Bill",
                 OwnerId = ownerId,
-                ShareCode = GenerateShortCode()
+                ShareCode = GenerateShortCode(),
+                Version = 1
             };
             await _unitOfWork.Bills.AddAsync(bill, ct);
         }
 
-        // 2. 同步成員
-        var existingMemberIds = bill.Members.Select(m => m.Id).ToHashSet();
-        var syncedMemberRemoteIds = new HashSet<Guid>();
-
-        foreach (var memberDto in dto.Members)
+        // 2. 同步成員 (Upsert)
+        // 為了讓後面的費用能找到關聯，我們先跑一遍成員同步，建立完整的 LocalId -> RemoteId 映射
+        foreach (var memberDto in dto.Members.Upsert ?? Enumerable.Empty<SyncMemberDto>())
         {
             Member member;
-            if (memberDto.RemoteId.HasValue && existingMemberIds.Contains(memberDto.RemoteId.Value))
+            if (memberDto.RemoteId.HasValue)
             {
-                member = bill.Members.First(m => m.Id == memberDto.RemoteId.Value);
-                member.Name = memberDto.Name;
-                member.DisplayOrder = memberDto.DisplayOrder;
-                member.LinkedUserId = memberDto.LinkedUserId;
-                member.ClaimedAt = memberDto.ClaimedAt;
-                syncedMemberRemoteIds.Add(member.Id);
+                member = bill.Members.FirstOrDefault(m => m.Id == memberDto.RemoteId.Value);
+                if (member != null)
+                {
+                    member.Name = memberDto.Name;
+                    member.DisplayOrder = memberDto.DisplayOrder;
+                    member.LinkedUserId = memberDto.LinkedUserId;
+                    member.ClaimedAt = memberDto.ClaimedAt;
+                }
+                else
+                {
+                    // 若有 RemoteId 但找不到，視為重建
+                    member = new Member
+                    {
+                        Id = memberDto.RemoteId.Value,
+                        BillId = bill.Id,
+                        Name = memberDto.Name,
+                        DisplayOrder = memberDto.DisplayOrder,
+                        LinkedUserId = memberDto.LinkedUserId,
+                        ClaimedAt = memberDto.ClaimedAt
+                    };
+                    bill.Members.Add(member);
+                }
             }
             else
             {
@@ -194,27 +245,40 @@ public class BillService : IBillService
             memberIdMappings[memberDto.LocalId] = member.Id;
         }
 
-        // 移除不在同步清單中的成員
-        var membersToRemove = bill.Members
-            .Where(m => existingMemberIds.Contains(m.Id) && !syncedMemberRemoteIds.Contains(m.Id))
-            .ToList();
-        foreach (var member in membersToRemove)
+        // 注意：除了 upsert 的成員，資料庫裡原本就有但沒被改動的成員，也應該放進 Mapping
+        // 關鍵：前端在建構請求時，必須把「所有成員」都放在 upsert 裡面，
+        // 這樣我們才能建立 LocalId 到 RemoteId 的完整映射。
+        // 目前前端的 billAdapter.ts 確實是送出所有成員，所以這裡沒問題。
+
+        // 3. 處理成員刪除 (Explicit Delete)
+        foreach (var deletedIdStr in dto.Members.DeletedIds ?? Enumerable.Empty<string>())
         {
-            bill.Members.Remove(member);
+            if (Guid.TryParse(deletedIdStr, out var deletedId))
+            {
+                var member = bill.Members.FirstOrDefault(m => m.Id == deletedId);
+                if (member != null)
+                {
+                    bill.Members.Remove(member);
+                }
+            }
         }
 
-        // 3. 同步費用
-        var existingExpenseIds = bill.Expenses.Select(e => e.Id).ToHashSet();
-        var syncedExpenseRemoteIds = new HashSet<Guid>();
-
-        foreach (var expenseDto in dto.Expenses)
+        // 4. 同步費用 (Upsert)
+        foreach (var expenseDto in dto.Expenses.Upsert ?? Enumerable.Empty<SyncExpenseDto>())
         {
             Expense expense;
-            if (expenseDto.RemoteId.HasValue && existingExpenseIds.Contains(expenseDto.RemoteId.Value))
+            if (expenseDto.RemoteId.HasValue)
             {
-                expense = bill.Expenses.First(e => e.Id == expenseDto.RemoteId.Value);
-                UpdateExpenseFromDto(expense, expenseDto, memberIdMappings);
-                syncedExpenseRemoteIds.Add(expense.Id);
+                expense = bill.Expenses.FirstOrDefault(e => e.Id == expenseDto.RemoteId.Value);
+                if (expense != null)
+                {
+                    UpdateExpenseFromDto(expense, expenseDto, memberIdMappings);
+                }
+                else
+                {
+                    expense = CreateExpenseFromDto(bill.Id, expenseDto, memberIdMappings);
+                    bill.Expenses.Add(expense);
+                }
             }
             else
             {
@@ -225,30 +289,150 @@ public class BillService : IBillService
             expenseIdMappings[expenseDto.LocalId] = expense.Id;
 
             // 同步費用細項
-            if (expenseDto.IsItemized && expenseDto.Items != null)
+            if (expenseDto.Items != null)
             {
-                SyncExpenseItems(expense, expenseDto.Items, memberIdMappings, expenseItemIdMappings);
+                SyncExpenseItemsIncremental(expense, expenseDto.Items, memberIdMappings, expenseItemIdMappings);
             }
         }
 
-        // 移除不在同步清單中的費用
-        var expensesToRemove = bill.Expenses
-            .Where(e => existingExpenseIds.Contains(e.Id) && !syncedExpenseRemoteIds.Contains(e.Id))
-            .ToList();
-        foreach (var expense in expensesToRemove)
+        // 5. 處理費用刪除 (Explicit Delete)
+        foreach (var deletedIdStr in dto.Expenses.DeletedIds ?? Enumerable.Empty<string>())
         {
-            bill.Expenses.Remove(expense);
+            if (Guid.TryParse(deletedIdStr, out var deletedId))
+            {
+                var expense = bill.Expenses.FirstOrDefault(e => e.Id == deletedId);
+                if (expense != null)
+                {
+                    bill.Expenses.Remove(expense);
+                }
+            }
         }
 
-        await _unitOfWork.SaveChangesAsync(ct);
+        // 更新帳單版本號與時間
+        bill.Version++;
+        bill.UpdatedAt = DateTime.UtcNow;
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync(ct);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
+        {
+            // 並發衝突（例如同一時間有另一個請求修改了資料）
+            // 重新讀取最新資料並回傳，讓前端重試
+            _unitOfWork.ClearChangeTracker(); // 清除追蹤，避免污染
+            var latest = await _unitOfWork.Bills.GetByIdWithDetailsAsync(bill.Id, ct);
+            if (latest == null)
+            {
+                return Result.Failure<SyncBillResponseDto>(ErrorCodes.BillNotFound, "Bill deleted during sync.");
+            }
+
+            return Result.Success(new SyncBillResponseDto(
+                latest.Id,
+                latest.Version,
+                latest.ShareCode,
+                new SyncIdMappingsDto(new(), new(), new()),
+                DateTime.UtcNow,
+                MapToBillDto(latest)
+            ));
+        }
 
         return new SyncBillResponseDto(
             bill.Id,
+            bill.Version,
             bill.ShareCode,
             new SyncIdMappingsDto(memberIdMappings, expenseIdMappings, expenseItemIdMappings),
             DateTime.UtcNow
         );
     }
+
+        private static void SyncExpenseItemsIncremental(
+
+            Expense expense,
+
+            SyncExpenseItemCollectionDto collection,
+
+            Dictionary<string, Guid> memberIdMappings,
+
+            Dictionary<string, Guid> expenseItemIdMappings)
+
+        {
+
+            // Upsert items
+
+            foreach (var itemDto in collection.Upsert ?? Enumerable.Empty<SyncExpenseItemDto>())
+
+            {
+
+                ExpenseItem item;
+
+                if (itemDto.RemoteId.HasValue)
+
+                {
+
+                    item = expense.Items.FirstOrDefault(i => i.Id == itemDto.RemoteId.Value);
+
+                    if (item != null)
+
+                    {
+
+                        UpdateExpenseItemFromDto(item, itemDto, memberIdMappings);
+
+                    }
+
+                    else
+
+                    {
+
+                        item = CreateExpenseItemFromDto(expense.Id, itemDto, memberIdMappings);
+
+                        expense.Items.Add(item);
+
+                    }
+
+                }
+
+                else
+
+                {
+
+                    item = CreateExpenseItemFromDto(expense.Id, itemDto, memberIdMappings);
+
+                    expense.Items.Add(item);
+
+                }
+
+                expenseItemIdMappings[itemDto.LocalId] = item.Id;
+
+            }
+
+    
+
+            // Delete items
+
+            foreach (var deletedIdStr in collection.DeletedIds ?? Enumerable.Empty<string>())
+
+            {
+
+                if (Guid.TryParse(deletedIdStr, out var deletedId))
+
+                {
+
+                    var item = expense.Items.FirstOrDefault(i => i.Id == deletedId);
+
+                    if (item != null)
+
+                    {
+
+                        expense.Items.Remove(item);
+
+                    }
+
+                }
+
+            }
+
+        }
 
     private static Expense CreateExpenseFromDto(
         Guid billId,
@@ -293,7 +477,8 @@ public class BillService : IBillService
         expense.Amount = dto.Amount;
         expense.ServiceFeePercent = dto.ServiceFeePercent;
         expense.IsItemized = dto.IsItemized;
-        expense.PaidById = dto.PaidByLocalId != null && memberIdMappings.TryGetValue(dto.PaidByLocalId, out var paidById)
+        expense.PaidById = dto.PaidByLocalId != null &&
+                           memberIdMappings.TryGetValue(dto.PaidByLocalId, out var paidById)
             ? paidById
             : null;
 
@@ -309,43 +494,6 @@ public class BillService : IBillService
                     MemberId = memberId
                 });
             }
-        }
-    }
-
-    private static void SyncExpenseItems(
-        Expense expense,
-        List<SyncExpenseItemDto> itemDtos,
-        Dictionary<string, Guid> memberIdMappings,
-        Dictionary<string, Guid> expenseItemIdMappings)
-    {
-        var existingItemIds = expense.Items.Select(i => i.Id).ToHashSet();
-        var syncedItemRemoteIds = new HashSet<Guid>();
-
-        foreach (var itemDto in itemDtos)
-        {
-            ExpenseItem item;
-            if (itemDto.RemoteId.HasValue && existingItemIds.Contains(itemDto.RemoteId.Value))
-            {
-                item = expense.Items.First(i => i.Id == itemDto.RemoteId.Value);
-                UpdateExpenseItemFromDto(item, itemDto, memberIdMappings);
-                syncedItemRemoteIds.Add(item.Id);
-            }
-            else
-            {
-                item = CreateExpenseItemFromDto(expense.Id, itemDto, memberIdMappings);
-                expense.Items.Add(item);
-            }
-
-            expenseItemIdMappings[itemDto.LocalId] = item.Id;
-        }
-
-        // 移除不在同步清單中的細項
-        var itemsToRemove = expense.Items
-            .Where(i => existingItemIds.Contains(i.Id) && !syncedItemRemoteIds.Contains(i.Id))
-            .ToList();
-        foreach (var item in itemsToRemove)
-        {
-            expense.Items.Remove(item);
         }
     }
 
@@ -418,6 +566,7 @@ public class BillService : IBillService
             bill.Id,
             bill.Name,
             bill.ShareCode,
+            bill.Version,
             bill.CreatedAt,
             bill.UpdatedAt,
             bill.Members.Select(m => new MemberDto(
@@ -438,13 +587,15 @@ public class BillService : IBillService
                 e.IsItemized,
                 e.PaidById,
                 e.Participants.Select(p => p.MemberId).ToList(),
-                e.IsItemized ? e.Items.Select(i => new ExpenseItemDto(
-                    i.Id,
-                    i.Name,
-                    i.Amount,
-                    i.PaidById,
-                    i.Participants.Select(p => p.MemberId).ToList()
-                )).ToList() : null,
+                e.IsItemized
+                    ? e.Items.Select(i => new ExpenseItemDto(
+                        i.Id,
+                        i.Name,
+                        i.Amount,
+                        i.PaidById,
+                        i.Participants.Select(p => p.MemberId).ToList()
+                    )).ToList()
+                    : null,
                 e.CreatedAt
             )).ToList()
         );

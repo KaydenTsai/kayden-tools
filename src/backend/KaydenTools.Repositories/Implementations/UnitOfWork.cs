@@ -33,6 +33,11 @@ public class UnitOfWork : IUnitOfWork
     public IShortUrlRepository ShortUrls => _shortUrls ??= new ShortUrlRepository(_context);
     public IUrlClickRepository UrlClicks => _urlClicks ??= new UrlClickRepository(_context);
 
+    public void ClearChangeTracker()
+    {
+        _context.ChangeTracker.Clear();
+    }
+
     public async Task<int> SaveChangesAsync(CancellationToken ct = default)
     {
         return await _context.SaveChangesAsync(ct);

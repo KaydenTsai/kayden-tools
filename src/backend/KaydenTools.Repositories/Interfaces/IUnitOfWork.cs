@@ -46,6 +46,11 @@ public interface IUnitOfWork : IDisposable
     IUrlClickRepository UrlClicks { get; }
 
     /// <summary>
+    /// 清除變更追蹤（用於並發衝突處理）
+    /// </summary>
+    void ClearChangeTracker();
+
+    /// <summary>
     /// 儲存所有變更
     /// </summary>
     /// <param name="ct">取消令牌</param>

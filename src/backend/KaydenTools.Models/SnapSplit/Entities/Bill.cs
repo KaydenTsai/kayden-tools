@@ -27,6 +27,11 @@ public class Bill : IEntity, IAuditableEntity, ISoftDeletable
     /// </summary>
     public string? ShareCode { get; set; }
 
+    /// <summary>
+    /// 版本號（用於樂觀鎖同步）
+    /// </summary>
+    public long Version { get; set; } = 1;
+
     // Audit
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }

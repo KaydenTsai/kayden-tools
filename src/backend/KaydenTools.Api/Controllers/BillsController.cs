@@ -180,9 +180,9 @@ public class BillsController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<SyncBillResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Sync([FromBody] SyncBillRequestDto dto, CancellationToken ct)
+    public async Task<IActionResult> Sync([FromBody] SyncBillRequestDto request, CancellationToken ct)
     {
-        var result = await _billService.SyncBillAsync(dto, _currentUserService.UserId, ct);
+        var result = await _billService.SyncBillAsync(request, _currentUserService.UserId, ct);
         if (result.IsFailure)
         {
             if (result.Error.Code == ErrorCodes.BillNotFound)
