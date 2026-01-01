@@ -16,6 +16,7 @@ public record BillDto(
     string Name,
     string? ShareCode,
     long Version,
+    bool IsSettled,
     DateTime CreatedAt,
     DateTime? UpdatedAt,
     List<MemberDto> Members,
@@ -31,6 +32,7 @@ public record BillSummaryDto(
     int MemberCount,
     int ExpenseCount,
     decimal TotalAmount,
+    bool IsSettled,
     DateTime UpdatedAt
 );
 

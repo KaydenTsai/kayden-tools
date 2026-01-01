@@ -34,4 +34,19 @@ public interface IBillRepository : IRepository<Bill>
     /// <param name="userId">使用者 ID</param>
     /// <param name="ct">取消令牌</param>
     Task<IReadOnlyList<Bill>> GetByLinkedUserIdAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// 取得帳單的當前版本（直接查詢資料庫，不使用快取）
+    /// </summary>
+    /// <param name="id">帳單 ID</param>
+    /// <param name="ct">取消令牌</param>
+    Task<long?> GetCurrentVersionAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>
+    /// 根據 ID 取得帳單並鎖定該列（使用 SELECT FOR UPDATE）
+    /// 用於防止並發修改
+    /// </summary>
+    /// <param name="id">帳單 ID</param>
+    /// <param name="ct">取消令牌</param>
+    Task<Bill?> GetByIdWithLockAsync(Guid id, CancellationToken ct = default);
 }

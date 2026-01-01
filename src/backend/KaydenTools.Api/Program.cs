@@ -1,7 +1,12 @@
 using System.Reflection;
 using System.Text;
 using FluentMigrator.Runner;
+using FluentValidation;
+using FluentValidation.AspNetCore;
+using KaydenTools.Api.Hubs;
 using KaydenTools.Api.Middleware;
+using KaydenTools.Api.Services;
+using KaydenTools.Api.Validators;
 using KaydenTools.Core.Configuration.Settings;
 using KaydenTools.Core.Extensions;
 using Kayden.Commons.Interfaces;
@@ -54,7 +59,12 @@ builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IBillNotificationService, BillNotificationService>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+
+// FluentValidation
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddValidatorsFromAssemblyContaining<CreateBillDtoValidator>();
 
 // JWT Authentication
 builder.Services.AddAuthentication(options =>
@@ -78,11 +88,38 @@ builder.Services.AddAuthentication(options =>
         ValidateLifetime = true,
         ClockSkew = TimeSpan.Zero
     };
+
+    // SignalR 透過 query string 傳遞 access_token
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+
+            // 如果是 SignalR Hub 的請求，從 query string 讀取 token
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+            {
+                context.Token = accessToken;
+            }
+            return Task.CompletedTask;
+        }
+    };
 });
 
 builder.Services.AddAuthorization();
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+    });
+builder.Services.AddSignalR()
+    .AddJsonProtocol(options =>
+    {
+        options.PayloadSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -166,38 +203,6 @@ app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<BillHub>("/hubs/bill");
 
 app.Run();
-
-/// <summary>
-/// 當前使用者服務實作
-/// </summary>
-public class CurrentUserService : ICurrentUserService
-{
-    private readonly IHttpContextAccessor _httpContextAccessor;
-
-    /// <summary>
-    /// 建構函式
-    /// </summary>
-    /// <param name="httpContextAccessor">HTTP 上下文存取器</param>
-    public CurrentUserService(IHttpContextAccessor httpContextAccessor)
-    {
-        _httpContextAccessor = httpContextAccessor;
-    }
-
-    /// <inheritdoc />
-    public Guid? UserId
-    {
-        get
-        {
-            var userIdClaim = _httpContextAccessor.HttpContext?.User?.FindFirst("sub")?.Value;
-            return Guid.TryParse(userIdClaim, out var userId) ? userId : null;
-        }
-    }
-
-    /// <inheritdoc />
-    public string? Email => _httpContextAccessor.HttpContext?.User?.FindFirst("email")?.Value;
-
-    /// <inheritdoc />
-    public bool IsAuthenticated => _httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated ?? false;
-}

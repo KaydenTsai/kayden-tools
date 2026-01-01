@@ -94,7 +94,7 @@ export function VerificationPanel({ bill }: VerificationPanelProps) {
 
                     for (const item of expense.items) {
                         const isParticipant = item.participants.includes(member.id);
-                        const isPayer = item.paidBy === member.id;
+                        const isPayer = item.paidById === member.id;
 
                         if (!isParticipant && !isPayer) continue;
 
@@ -138,7 +138,7 @@ export function VerificationPanel({ bill }: VerificationPanelProps) {
                 } else {
                     // 簡單模式
                     const isParticipant = expense.participants.includes(member.id);
-                    const isPayer = expense.paidBy === member.id;
+                    const isPayer = expense.paidById === member.id;
 
                     if (!isParticipant && !isPayer) continue;
 

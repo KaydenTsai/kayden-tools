@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="7b160a10-029d-490a-afef-277c65e424b4" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/docs/architecture/overview.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/architecture/snapsplit-sync-refactor-spec.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/backend/adr/000-template.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/backend/adr/001-tech-stack.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/backend/adr/002-project-structure.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/backend/adr/003-authentication.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/backend/adr/004-database-design.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/backend/adr/005-module-separation.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/backend/adr/README.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/deployment-guide.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/oauth-troubleshooting.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/snap-split-v3-spec.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/snapsplit-plan.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/spec/AI_CONTEXT.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/spec/TASKS_BACKLOG.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/spec/backend/DOMAIN_MAP.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/spec/backend/TECH_RULES.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/spec/frontend/PROJECT_MAP.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/spec/frontend/TECH_RULES.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/split-bill-review.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docs/split-bill-spec.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Api/Hubs/BillHub.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Api/Services/CurrentUserService.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Api/Validators/BillValidators.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Api/Validators/ExpenseValidators.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Api/Validators/MemberValidators.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Migration/Migrations/202412300001_InitialV3Schema.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Migration/Migrations/202412310002_AddExpenseAuditColumns.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Models/SnapSplit/Dtos/OperationDto.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Models/SnapSplit/Entities/Operation.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Configurations/OperationConfiguration.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Implementations/OperationRepository.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Implementations/SettledTransferRepository.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Interfaces/IOperationRepository.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Interfaces/ISettledTransferRepository.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Services/Interfaces/IOperationService.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Services/SnapSplit/OperationService.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/frontend/api/models/syncExpenseCollectionDto.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/frontend/api/models/syncExpenseItemCollectionDto.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/frontend/api/models/syncMemberCollectionDto.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/frontend/components/ui/CollaborationErrorBoundary.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/frontend/hooks/useBillCollaboration.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/frontend/hooks/useBillPolling.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/frontend/services/operations/applier.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/frontend/services/operations/creator.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/frontend/services/signalr/billConnection.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Api/Controllers/BillsController.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Api/Controllers/BillsController.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Api/Program.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Api/Program.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Migration/Migrations/202512270001_CreateSchemas.cs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Migration/Migrations/202512270002_CreateUsersTable.cs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Migration/Migrations/202512270003_CreateRefreshTokensTable.cs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Migration/Migrations/202512270004_CreateSnapSplitTables.cs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Migration/Migrations/202512270005_CreateExpenseItemsTables.cs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Migration/Migrations/202512270006_CreateSettlementsTable.cs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Migration/Migrations/202512270007_CreateUrlShortenerTables.cs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Migration/Migrations/202512280001_AddMemberClaimFields.cs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Migration/Migrations/202512280002_AddBillVersionField.cs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Models/SnapSplit/Dtos/BillDto.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Models/SnapSplit/Dtos/BillDto.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Models/SnapSplit/Dtos/ExpenseItemDto.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Models/SnapSplit/Dtos/ExpenseItemDto.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Models/SnapSplit/Entities/Bill.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Models/SnapSplit/Entities/Bill.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Models/SnapSplit/Entities/ExpenseItem.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Models/SnapSplit/Entities/ExpenseItem.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Models/SnapSplit/Entities/Member.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Models/SnapSplit/Entities/Member.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Models/SnapSplit/Entities/Settlement.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Models/SnapSplit/Entities/SettledTransfer.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/AppDbContext.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/AppDbContext.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Configurations/BillConfiguration.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Configurations/BillConfiguration.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Configurations/ExpenseItemParticipantConfiguration.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Configurations/ExpenseItemParticipantConfiguration.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Configurations/SettlementConfiguration.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Configurations/SettledTransferConfiguration.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Implementations/BillRepository.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Implementations/BillRepository.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Implementations/SettlementRepository.cs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Implementations/UnitOfWork.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Implementations/UnitOfWork.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Interfaces/IBillRepository.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Interfaces/IBillRepository.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Interfaces/ISettlementRepository.cs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Interfaces/IUnitOfWork.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Repositories/Interfaces/IUnitOfWork.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Services/Extensions/ServiceCollectionExtensions.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Services/Extensions/ServiceCollectionExtensions.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Services/Interfaces/IBillService.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Services/Interfaces/IBillService.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Services/SnapSplit/BillService.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Services/SnapSplit/BillService.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Services/SnapSplit/ExpenseService.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Services/SnapSplit/ExpenseService.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.Services/SnapSplit/SettlementService.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.Services/SnapSplit/SettlementService.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/KaydenTools.sln" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/KaydenTools.sln" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/adapters/billAdapter.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/adapters/billAdapter.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/api/endpoints/bills/bills.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/api/endpoints/bills/bills.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/api/models/billDto.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/api/models/billDto.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/api/models/createExpenseItemDto.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/api/models/createExpenseItemDto.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/api/models/expenseItemDto.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/api/models/expenseItemDto.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/api/models/index.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/api/models/index.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/api/models/syncBillRequestDto.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/api/models/syncBillRequestDto.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/api/models/syncBillResponseDto.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/api/models/syncBillResponseDto.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/api/models/syncExpenseDto.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/api/models/syncExpenseDto.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/components/dialogs/ClaimPromptDialog.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/components/dialogs/ClaimPromptDialog.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/hooks/useAutoSync.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/hooks/useAutoSync.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/hooks/useBillSync.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/hooks/useBillSync.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/hooks/useMyBillsSync.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/hooks/useMyBillsSync.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/package-lock.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/package.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/pages/tools/snap-split/components/ExpenseForm.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/pages/tools/snap-split/components/ExpenseForm.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/pages/tools/snap-split/components/ExpenseList.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/pages/tools/snap-split/components/ExpenseList.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/pages/tools/snap-split/components/VerificationPanel.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/pages/tools/snap-split/components/VerificationPanel.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/pages/tools/snap-split/views/BillDetailView.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/pages/tools/snap-split/views/BillDetailView.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/pages/tools/snap-split/views/BillListView.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/pages/tools/snap-split/views/BillListView.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/pages/tools/snap-split/views/ItemizedExpenseView.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/pages/tools/snap-split/views/ItemizedExpenseView.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/services/syncQueue.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/services/syncQueue.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/stores/snapSplitStore.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/stores/snapSplitStore.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/types/snap-split.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/types/snap-split.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/utils/settlement.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/utils/settlement.ts" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="KubernetesApiPersistence"><![CDATA[{}]]></component>
+  <component name="KubernetesApiProvider"><![CDATA[{
+  "isMigrated": true
+}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 6
+}</component>
+  <component name="ProjectId" id="37CNbb5NOvwv5tpPZdmjYcweNpJ" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/kayden_tsai/Kayden/kayden-tools/src/frontend&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.keymap&quot;,
+    &quot;ts.external.directory.path&quot;: &quot;/Users/kayden_tsai/Applications/WebStorm.app/Contents/plugins/javascript-plugin/jsLanguageServicesImpl/external&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/src/frontend" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/src/frontend" />
+      <recent name="$PROJECT_DIR$/src/layouts" />
+    </key>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-3aa1da707db6-JavaScript-WS-252.27397.92" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="7b160a10-029d-490a-afef-277c65e424b4" name="Changes" comment="" />
+      <created>1766403165715</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1766403165715</updated>
+      <workItem from="1766403166871" duration="13338000" />
+      <workItem from="1766418338626" duration="2373000" />
+      <workItem from="1766460031535" duration="477000" />
+      <workItem from="1766460514538" duration="3340000" />
+      <workItem from="1766636881446" duration="48696000" />
+      <workItem from="1766755953012" duration="92342000" />
+      <workItem from="1766994216994" duration="792000" />
+      <workItem from="1767011629301" duration="5961000" />
+      <workItem from="1767093234464" duration="26960000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+</project>

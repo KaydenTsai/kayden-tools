@@ -22,6 +22,7 @@ import {
     ArrowBack as ArrowBackIcon,
     Calculate as CalculateIcon,
     CloudOff as CloudOffIcon,
+    CloudSync as CloudSyncIcon,
     FactCheck as FactCheckIcon,
     Group as GroupIcon,
     Login as LoginIcon,
@@ -44,6 +45,10 @@ import { useAuthStore } from "@/stores/authStore";
 import type { Bill } from "@/types/snap-split";
 import { formatAmount, getExpenseTotal } from "@/utils/settlement";
 import { SlideTransition } from "@/components/ui/SlideTransition";
+import { CollaborationErrorBoundary } from "@/components/ui/CollaborationErrorBoundary";
+import { useBillPolling } from "@/hooks/useBillPolling";
+import { useBillCollaboration } from "@/hooks/useBillCollaboration";
+import { useBillSync } from "@/hooks/useBillSync";
 
 interface BillDetailViewProps {
     bill: Bill;
@@ -57,6 +62,19 @@ export function BillDetailView({ bill, onBack, isReadOnly = false, isAuthenticat
     const { user } = useAuthStore();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+    // 啟用 SignalR 即時協作（如果有 remoteId）
+    useBillCollaboration({
+        remoteId: bill.remoteId,
+        localBillId: bill.id,
+        enabled: !isReadOnly && !!bill.remoteId,
+    });
+
+    // 備用：自動輪詢以同步最新修改（當 SignalR 不可用時）
+    useBillPolling(bill.id, !isReadOnly && !!bill.remoteId);
+
+    // Dev: 手動同步功能
+    const { syncBill, isUploading } = useBillSync();
 
     // 協作模式鎖定：任何成員已綁定帳號 → 需要登入才能操作
     const isCollaborative = bill.members.some(m => !!m.userId);
@@ -81,7 +99,7 @@ export function BillDetailView({ bill, onBack, isReadOnly = false, isAuthenticat
         isAuthenticated &&
         user?.id &&
         !bill.isSnapshot &&
-        skippedClaimBillIds.includes(bill.id) &&
+        skippedClaimBillIds.has(bill.id) &&
         !bill.members.some(m => m.userId === user.id) &&
         bill.members.some(m => !m.userId);
 
@@ -114,7 +132,7 @@ export function BillDetailView({ bill, onBack, isReadOnly = false, isAuthenticat
 
     const handleSaveEditName = () => {
         if (editName.trim()) {
-            updateBillName(editName.trim());
+            updateBillName(bill.id, editName.trim());
         }
         setEditNameOpen(false);
     };
@@ -143,6 +161,7 @@ export function BillDetailView({ bill, onBack, isReadOnly = false, isAuthenticat
     }
 
     return (
+        <CollaborationErrorBoundary fallbackMessage="帳單協作功能發生錯誤">
         <Box sx={{ pb: isMobile ? 8 : 0 }}> {/* Add padding for bottom nav only on mobile */}
             <Paper
                 elevation={2}
@@ -244,6 +263,26 @@ export function BillDetailView({ bill, onBack, isReadOnly = false, isAuthenticat
                             }}
                         >
                             <ShareIcon />
+                        </IconButton>
+                    )}
+                    {/* Dev: 手動同步按鈕 */}
+                    {import.meta.env.DEV && (
+                        <IconButton
+                            onClick={() => {
+                                console.log('[Dev] Manual sync triggered for bill:', bill.id);
+                                console.log('[Dev] Bill data:', JSON.stringify(bill, null, 2));
+                                syncBill(bill);
+                            }}
+                            disabled={isUploading}
+                            sx={{
+                                bgcolor: 'warning.main',
+                                color: 'warning.contrastText',
+                                '&:hover': { bgcolor: 'warning.dark' },
+                                '&.Mui-disabled': { bgcolor: 'action.disabledBackground' },
+                            }}
+                            title="[DEV] 立即同步帳單"
+                        >
+                            <CloudSyncIcon />
                         </IconButton>
                     )}
                 </Box>
@@ -480,5 +519,6 @@ export function BillDetailView({ bill, onBack, isReadOnly = false, isAuthenticat
                 onClose={() => setLoginDialogOpen(false)}
             />
         </Box>
+        </CollaborationErrorBoundary>
     );
 }

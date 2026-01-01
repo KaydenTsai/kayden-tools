@@ -1,10 +1,10 @@
 import {
-    postApiBillsSync,
-    deleteApiBillsId,
+    syncBill,
+    deleteBill,
 } from '@/api';
-import type { SyncBillRequestDto, SyncBillResponseDtoApiResponse } from '@/api';
+import type { SyncBillResponseDtoApiResponse } from '@/api';
 import { useSnapSplitStore } from '@/stores/snapSplitStore';
-import type { Bill } from '@/types/snap-split';
+import { billToSyncRequest } from '@/adapters/billAdapter'; // Import from adapter
 
 interface SyncOperation {
     id: string;
@@ -20,43 +20,6 @@ interface SyncOperation {
 const STORAGE_KEY = 'kayden-tools-sync-queue';
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 5000;
-
-/**
- * 將前端 Bill 轉換為 SyncBillRequestDto
- */
-function billToSyncRequest(bill: Bill): SyncBillRequestDto {
-    return {
-        remoteId: bill.remoteId ?? undefined,
-        localId: bill.id,
-        name: bill.name,
-        members: bill.members.map((m, index) => ({
-            localId: m.id,
-            remoteId: m.remoteId ?? undefined,
-            name: m.name,
-            displayOrder: index,
-        })),
-        expenses: bill.expenses.map(e => ({
-            localId: e.id,
-            remoteId: e.remoteId ?? undefined,
-            name: e.name,
-            amount: e.amount,
-            serviceFeePercent: e.serviceFeePercent,
-            isItemized: e.isItemized,
-            paidByLocalId: e.paidBy || undefined,
-            participantLocalIds: e.participants,
-            items: e.isItemized ? e.items.map(item => ({
-                localId: item.id,
-                remoteId: item.remoteId ?? undefined,
-                name: item.name,
-                amount: item.amount,
-                paidByLocalId: item.paidBy,
-                participantLocalIds: item.participants,
-            })) : undefined,
-        })),
-        settledTransfers: bill.settledTransfers,
-        localUpdatedAt: bill.updatedAt,
-    };
-}
 
 /**
  * 同步佇列管理
@@ -172,7 +135,7 @@ class SyncQueueService {
             store.setBillSyncStatus(bill.id, 'syncing');
 
             const request = billToSyncRequest(bill);
-            const response = await postApiBillsSync(request);
+            const response = await syncBill(request);
             const apiResponse = response as SyncBillResponseDtoApiResponse;
 
             if (!apiResponse.success || !apiResponse.data) {
@@ -194,7 +157,7 @@ class SyncQueueService {
         } else if (operation.type === 'delete') {
             const bill = store.bills.find(b => b.id === operation.billId);
             if (bill?.remoteId) {
-                await deleteApiBillsId(bill.remoteId);
+                await deleteBill(bill.remoteId);
             }
         }
     }

@@ -28,8 +28,12 @@ import { formatAmount, getExpenseTotal } from "@/utils/settlement";
 import type { Bill } from "@/types/snap-split";
 import { SlideTransition } from "@/components/ui/SlideTransition";
 import { SyncStatusIcon } from "@/components/ui/SyncStatusIndicator";
+import { useMyBillsSync } from "@/hooks/useMyBillsSync";
+import { deleteBill as deleteBillApi } from "@/api/endpoints/bills/bills";
 
 export function BillListView() {
+    // 啟用自動輪詢以同步列表變更（如刪除帳單）
+    useMyBillsSync(true);
     const { bills, selectBill, createBill, deleteBill } = useSnapSplitStore();
 
     const [newOpen, setNewOpen] = useState(false);
@@ -51,8 +55,18 @@ export function BillListView() {
         setDeleteOpen(true);
     };
 
-    const handleDelete = () => {
+    const handleDelete = async () => {
         if (deletingBill) {
+            // 如果帳單已同步到雲端，則呼叫 API 刪除
+            if (deletingBill.remoteId) {
+                try {
+                    await deleteBillApi(deletingBill.remoteId);
+                } catch (error) {
+                    console.error('Failed to delete bill from server:', error);
+                    // 即使 API 失敗，我們仍可能想從本地移除？
+                    // 或者顯示錯誤並中止？這裡選擇為了 UX 流暢先不報錯，繼續移除本地
+                }
+            }
             deleteBill(deletingBill.id);
         }
         setDeleteOpen(false);

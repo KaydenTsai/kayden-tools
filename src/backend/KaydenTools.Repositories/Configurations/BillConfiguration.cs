@@ -19,6 +19,10 @@ public class BillConfiguration : IEntityTypeConfiguration<Bill>
         builder.Property(b => b.ShareCode)
             .HasMaxLength(20);
 
+        // 將 Version 配置為並發令牌，確保資料庫層級的樂觀鎖
+        builder.Property(b => b.Version)
+            .IsConcurrencyToken();
+
         builder.HasIndex(b => b.ShareCode)
             .IsUnique()
             .HasFilter("share_code IS NOT NULL AND is_deleted = false");

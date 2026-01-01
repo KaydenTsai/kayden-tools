@@ -26,6 +26,8 @@ import type {
   BillDtoApiResponse,
   BillDtoIReadOnlyListApiResponse,
   CreateBillDto,
+  DeltaSyncRequest,
+  DeltaSyncResponseApiResponse,
   ObjectApiResponse,
   SyncBillRequestDto,
   SyncBillResponseDtoApiResponse,
@@ -37,7 +39,7 @@ import { axiosInstance } from "../../axios-instance";
 /**
  * @summary 根據 ID 取得帳單
  */
-export const getApiBillsId = (id: string, signal?: AbortSignal) => {
+export const getBillById = (id: string, signal?: AbortSignal) => {
   return axiosInstance<BillDtoApiResponse>({
     url: `/api/Bills/${id}`,
     method: "GET",
@@ -45,28 +47,28 @@ export const getApiBillsId = (id: string, signal?: AbortSignal) => {
   });
 };
 
-export const getGetApiBillsIdQueryKey = (id?: string) => {
+export const getGetBillByIdQueryKey = (id?: string) => {
   return [`/api/Bills/${id}`] as const;
 };
 
-export const getGetApiBillsIdQueryOptions = <
-  TData = Awaited<ReturnType<typeof getApiBillsId>>,
+export const getGetBillByIdQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBillById>>,
   TError = ApiResponse,
 >(
   id: string,
   options?: {
     query?: Partial<
-      UseQueryOptions<Awaited<ReturnType<typeof getApiBillsId>>, TError, TData>
+      UseQueryOptions<Awaited<ReturnType<typeof getBillById>>, TError, TData>
     >;
   },
 ) => {
   const { query: queryOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getGetApiBillsIdQueryKey(id);
+  const queryKey = queryOptions?.queryKey ?? getGetBillByIdQueryKey(id);
 
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof getApiBillsId>>> = ({
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getBillById>>> = ({
     signal,
-  }) => getApiBillsId(id, signal);
+  }) => getBillById(id, signal);
 
   return {
     queryKey,
@@ -74,31 +76,31 @@ export const getGetApiBillsIdQueryOptions = <
     enabled: !!id,
     ...queryOptions,
   } as UseQueryOptions<
-    Awaited<ReturnType<typeof getApiBillsId>>,
+    Awaited<ReturnType<typeof getBillById>>,
     TError,
     TData
   > & { queryKey: DataTag<QueryKey, TData, TError> };
 };
 
-export type GetApiBillsIdQueryResult = NonNullable<
-  Awaited<ReturnType<typeof getApiBillsId>>
+export type GetBillByIdQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBillById>>
 >;
-export type GetApiBillsIdQueryError = ApiResponse;
+export type GetBillByIdQueryError = ApiResponse;
 
-export function useGetApiBillsId<
-  TData = Awaited<ReturnType<typeof getApiBillsId>>,
+export function useGetBillById<
+  TData = Awaited<ReturnType<typeof getBillById>>,
   TError = ApiResponse,
 >(
   id: string,
   options: {
     query: Partial<
-      UseQueryOptions<Awaited<ReturnType<typeof getApiBillsId>>, TError, TData>
+      UseQueryOptions<Awaited<ReturnType<typeof getBillById>>, TError, TData>
     > &
       Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getApiBillsId>>,
+          Awaited<ReturnType<typeof getBillById>>,
           TError,
-          Awaited<ReturnType<typeof getApiBillsId>>
+          Awaited<ReturnType<typeof getBillById>>
         >,
         "initialData"
       >;
@@ -107,20 +109,20 @@ export function useGetApiBillsId<
 ): DefinedUseQueryResult<TData, TError> & {
   queryKey: DataTag<QueryKey, TData, TError>;
 };
-export function useGetApiBillsId<
-  TData = Awaited<ReturnType<typeof getApiBillsId>>,
+export function useGetBillById<
+  TData = Awaited<ReturnType<typeof getBillById>>,
   TError = ApiResponse,
 >(
   id: string,
   options?: {
     query?: Partial<
-      UseQueryOptions<Awaited<ReturnType<typeof getApiBillsId>>, TError, TData>
+      UseQueryOptions<Awaited<ReturnType<typeof getBillById>>, TError, TData>
     > &
       Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getApiBillsId>>,
+          Awaited<ReturnType<typeof getBillById>>,
           TError,
-          Awaited<ReturnType<typeof getApiBillsId>>
+          Awaited<ReturnType<typeof getBillById>>
         >,
         "initialData"
       >;
@@ -129,14 +131,14 @@ export function useGetApiBillsId<
 ): UseQueryResult<TData, TError> & {
   queryKey: DataTag<QueryKey, TData, TError>;
 };
-export function useGetApiBillsId<
-  TData = Awaited<ReturnType<typeof getApiBillsId>>,
+export function useGetBillById<
+  TData = Awaited<ReturnType<typeof getBillById>>,
   TError = ApiResponse,
 >(
   id: string,
   options?: {
     query?: Partial<
-      UseQueryOptions<Awaited<ReturnType<typeof getApiBillsId>>, TError, TData>
+      UseQueryOptions<Awaited<ReturnType<typeof getBillById>>, TError, TData>
     >;
   },
   queryClient?: QueryClient,
@@ -147,21 +149,21 @@ export function useGetApiBillsId<
  * @summary 根據 ID 取得帳單
  */
 
-export function useGetApiBillsId<
-  TData = Awaited<ReturnType<typeof getApiBillsId>>,
+export function useGetBillById<
+  TData = Awaited<ReturnType<typeof getBillById>>,
   TError = ApiResponse,
 >(
   id: string,
   options?: {
     query?: Partial<
-      UseQueryOptions<Awaited<ReturnType<typeof getApiBillsId>>, TError, TData>
+      UseQueryOptions<Awaited<ReturnType<typeof getBillById>>, TError, TData>
     >;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
   queryKey: DataTag<QueryKey, TData, TError>;
 } {
-  const queryOptions = getGetApiBillsIdQueryOptions(id, options);
+  const queryOptions = getGetBillByIdQueryOptions(id, options);
 
   const query = useQuery(queryOptions, queryClient) as UseQueryResult<
     TData,
@@ -176,7 +178,7 @@ export function useGetApiBillsId<
 /**
  * @summary 更新帳單
  */
-export const putApiBillsId = (id: string, updateBillDto: UpdateBillDto) => {
+export const updateBill = (id: string, updateBillDto: UpdateBillDto) => {
   return axiosInstance<BillDtoApiResponse>({
     url: `/api/Bills/${id}`,
     method: "PUT",
@@ -185,23 +187,23 @@ export const putApiBillsId = (id: string, updateBillDto: UpdateBillDto) => {
   });
 };
 
-export const getPutApiBillsIdMutationOptions = <
+export const getUpdateBillMutationOptions = <
   TError = ApiResponse,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof putApiBillsId>>,
+    Awaited<ReturnType<typeof updateBill>>,
     TError,
     { id: string; data: UpdateBillDto },
     TContext
   >;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof putApiBillsId>>,
+  Awaited<ReturnType<typeof updateBill>>,
   TError,
   { id: string; data: UpdateBillDto },
   TContext
 > => {
-  const mutationKey = ["putApiBillsId"];
+  const mutationKey = ["updateBill"];
   const { mutation: mutationOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -211,30 +213,30 @@ export const getPutApiBillsIdMutationOptions = <
     : { mutation: { mutationKey } };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof putApiBillsId>>,
+    Awaited<ReturnType<typeof updateBill>>,
     { id: string; data: UpdateBillDto }
   > = (props) => {
     const { id, data } = props ?? {};
 
-    return putApiBillsId(id, data);
+    return updateBill(id, data);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type PutApiBillsIdMutationResult = NonNullable<
-  Awaited<ReturnType<typeof putApiBillsId>>
+export type UpdateBillMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateBill>>
 >;
-export type PutApiBillsIdMutationBody = UpdateBillDto;
-export type PutApiBillsIdMutationError = ApiResponse;
+export type UpdateBillMutationBody = UpdateBillDto;
+export type UpdateBillMutationError = ApiResponse;
 
 /**
  * @summary 更新帳單
  */
-export const usePutApiBillsId = <TError = ApiResponse, TContext = unknown>(
+export const useUpdateBill = <TError = ApiResponse, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof putApiBillsId>>,
+      Awaited<ReturnType<typeof updateBill>>,
       TError,
       { id: string; data: UpdateBillDto },
       TContext
@@ -242,39 +244,39 @@ export const usePutApiBillsId = <TError = ApiResponse, TContext = unknown>(
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
-  Awaited<ReturnType<typeof putApiBillsId>>,
+  Awaited<ReturnType<typeof updateBill>>,
   TError,
   { id: string; data: UpdateBillDto },
   TContext
 > => {
-  const mutationOptions = getPutApiBillsIdMutationOptions(options);
+  const mutationOptions = getUpdateBillMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
 };
 /**
  * @summary 刪除帳單
  */
-export const deleteApiBillsId = (id: string) => {
+export const deleteBill = (id: string) => {
   return axiosInstance<void>({ url: `/api/Bills/${id}`, method: "DELETE" });
 };
 
-export const getDeleteApiBillsIdMutationOptions = <
+export const getDeleteBillMutationOptions = <
   TError = ApiResponse,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof deleteApiBillsId>>,
+    Awaited<ReturnType<typeof deleteBill>>,
     TError,
     { id: string },
     TContext
   >;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof deleteApiBillsId>>,
+  Awaited<ReturnType<typeof deleteBill>>,
   TError,
   { id: string },
   TContext
 > => {
-  const mutationKey = ["deleteApiBillsId"];
+  const mutationKey = ["deleteBill"];
   const { mutation: mutationOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -284,30 +286,30 @@ export const getDeleteApiBillsIdMutationOptions = <
     : { mutation: { mutationKey } };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof deleteApiBillsId>>,
+    Awaited<ReturnType<typeof deleteBill>>,
     { id: string }
   > = (props) => {
     const { id } = props ?? {};
 
-    return deleteApiBillsId(id);
+    return deleteBill(id);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type DeleteApiBillsIdMutationResult = NonNullable<
-  Awaited<ReturnType<typeof deleteApiBillsId>>
+export type DeleteBillMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteBill>>
 >;
 
-export type DeleteApiBillsIdMutationError = ApiResponse;
+export type DeleteBillMutationError = ApiResponse;
 
 /**
  * @summary 刪除帳單
  */
-export const useDeleteApiBillsId = <TError = ApiResponse, TContext = unknown>(
+export const useDeleteBill = <TError = ApiResponse, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof deleteApiBillsId>>,
+      Awaited<ReturnType<typeof deleteBill>>,
       TError,
       { id: string },
       TContext
@@ -315,22 +317,19 @@ export const useDeleteApiBillsId = <TError = ApiResponse, TContext = unknown>(
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
-  Awaited<ReturnType<typeof deleteApiBillsId>>,
+  Awaited<ReturnType<typeof deleteBill>>,
   TError,
   { id: string },
   TContext
 > => {
-  const mutationOptions = getDeleteApiBillsIdMutationOptions(options);
+  const mutationOptions = getDeleteBillMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
 };
 /**
  * @summary 根據分享碼取得帳單
  */
-export const getApiBillsShareShareCode = (
-  shareCode: string,
-  signal?: AbortSignal,
-) => {
+export const getBillByShareCode = (shareCode: string, signal?: AbortSignal) => {
   return axiosInstance<BillDtoApiResponse>({
     url: `/api/Bills/share/${shareCode}`,
     method: "GET",
@@ -338,19 +337,19 @@ export const getApiBillsShareShareCode = (
   });
 };
 
-export const getGetApiBillsShareShareCodeQueryKey = (shareCode?: string) => {
+export const getGetBillByShareCodeQueryKey = (shareCode?: string) => {
   return [`/api/Bills/share/${shareCode}`] as const;
 };
 
-export const getGetApiBillsShareShareCodeQueryOptions = <
-  TData = Awaited<ReturnType<typeof getApiBillsShareShareCode>>,
+export const getGetBillByShareCodeQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBillByShareCode>>,
   TError = ApiResponse,
 >(
   shareCode: string,
   options?: {
     query?: Partial<
       UseQueryOptions<
-        Awaited<ReturnType<typeof getApiBillsShareShareCode>>,
+        Awaited<ReturnType<typeof getBillByShareCode>>,
         TError,
         TData
       >
@@ -360,11 +359,11 @@ export const getGetApiBillsShareShareCodeQueryOptions = <
   const { query: queryOptions } = options ?? {};
 
   const queryKey =
-    queryOptions?.queryKey ?? getGetApiBillsShareShareCodeQueryKey(shareCode);
+    queryOptions?.queryKey ?? getGetBillByShareCodeQueryKey(shareCode);
 
   const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof getApiBillsShareShareCode>>
-  > = ({ signal }) => getApiBillsShareShareCode(shareCode, signal);
+    Awaited<ReturnType<typeof getBillByShareCode>>
+  > = ({ signal }) => getBillByShareCode(shareCode, signal);
 
   return {
     queryKey,
@@ -372,35 +371,35 @@ export const getGetApiBillsShareShareCodeQueryOptions = <
     enabled: !!shareCode,
     ...queryOptions,
   } as UseQueryOptions<
-    Awaited<ReturnType<typeof getApiBillsShareShareCode>>,
+    Awaited<ReturnType<typeof getBillByShareCode>>,
     TError,
     TData
   > & { queryKey: DataTag<QueryKey, TData, TError> };
 };
 
-export type GetApiBillsShareShareCodeQueryResult = NonNullable<
-  Awaited<ReturnType<typeof getApiBillsShareShareCode>>
+export type GetBillByShareCodeQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBillByShareCode>>
 >;
-export type GetApiBillsShareShareCodeQueryError = ApiResponse;
+export type GetBillByShareCodeQueryError = ApiResponse;
 
-export function useGetApiBillsShareShareCode<
-  TData = Awaited<ReturnType<typeof getApiBillsShareShareCode>>,
+export function useGetBillByShareCode<
+  TData = Awaited<ReturnType<typeof getBillByShareCode>>,
   TError = ApiResponse,
 >(
   shareCode: string,
   options: {
     query: Partial<
       UseQueryOptions<
-        Awaited<ReturnType<typeof getApiBillsShareShareCode>>,
+        Awaited<ReturnType<typeof getBillByShareCode>>,
         TError,
         TData
       >
     > &
       Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getApiBillsShareShareCode>>,
+          Awaited<ReturnType<typeof getBillByShareCode>>,
           TError,
-          Awaited<ReturnType<typeof getApiBillsShareShareCode>>
+          Awaited<ReturnType<typeof getBillByShareCode>>
         >,
         "initialData"
       >;
@@ -409,24 +408,24 @@ export function useGetApiBillsShareShareCode<
 ): DefinedUseQueryResult<TData, TError> & {
   queryKey: DataTag<QueryKey, TData, TError>;
 };
-export function useGetApiBillsShareShareCode<
-  TData = Awaited<ReturnType<typeof getApiBillsShareShareCode>>,
+export function useGetBillByShareCode<
+  TData = Awaited<ReturnType<typeof getBillByShareCode>>,
   TError = ApiResponse,
 >(
   shareCode: string,
   options?: {
     query?: Partial<
       UseQueryOptions<
-        Awaited<ReturnType<typeof getApiBillsShareShareCode>>,
+        Awaited<ReturnType<typeof getBillByShareCode>>,
         TError,
         TData
       >
     > &
       Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getApiBillsShareShareCode>>,
+          Awaited<ReturnType<typeof getBillByShareCode>>,
           TError,
-          Awaited<ReturnType<typeof getApiBillsShareShareCode>>
+          Awaited<ReturnType<typeof getBillByShareCode>>
         >,
         "initialData"
       >;
@@ -435,15 +434,15 @@ export function useGetApiBillsShareShareCode<
 ): UseQueryResult<TData, TError> & {
   queryKey: DataTag<QueryKey, TData, TError>;
 };
-export function useGetApiBillsShareShareCode<
-  TData = Awaited<ReturnType<typeof getApiBillsShareShareCode>>,
+export function useGetBillByShareCode<
+  TData = Awaited<ReturnType<typeof getBillByShareCode>>,
   TError = ApiResponse,
 >(
   shareCode: string,
   options?: {
     query?: Partial<
       UseQueryOptions<
-        Awaited<ReturnType<typeof getApiBillsShareShareCode>>,
+        Awaited<ReturnType<typeof getBillByShareCode>>,
         TError,
         TData
       >
@@ -457,15 +456,15 @@ export function useGetApiBillsShareShareCode<
  * @summary 根據分享碼取得帳單
  */
 
-export function useGetApiBillsShareShareCode<
-  TData = Awaited<ReturnType<typeof getApiBillsShareShareCode>>,
+export function useGetBillByShareCode<
+  TData = Awaited<ReturnType<typeof getBillByShareCode>>,
   TError = ApiResponse,
 >(
   shareCode: string,
   options?: {
     query?: Partial<
       UseQueryOptions<
-        Awaited<ReturnType<typeof getApiBillsShareShareCode>>,
+        Awaited<ReturnType<typeof getBillByShareCode>>,
         TError,
         TData
       >
@@ -475,10 +474,7 @@ export function useGetApiBillsShareShareCode<
 ): UseQueryResult<TData, TError> & {
   queryKey: DataTag<QueryKey, TData, TError>;
 } {
-  const queryOptions = getGetApiBillsShareShareCodeQueryOptions(
-    shareCode,
-    options,
-  );
+  const queryOptions = getGetBillByShareCodeQueryOptions(shareCode, options);
 
   const query = useQuery(queryOptions, queryClient) as UseQueryResult<
     TData,
@@ -493,7 +489,7 @@ export function useGetApiBillsShareShareCode<
 /**
  * @summary 取得當前使用者參與的帳單
  */
-export const getApiBillsMine = (signal?: AbortSignal) => {
+export const getMyBills = (signal?: AbortSignal) => {
   return axiosInstance<BillDtoIReadOnlyListApiResponse>({
     url: `/api/Bills/mine`,
     method: "GET",
@@ -501,55 +497,51 @@ export const getApiBillsMine = (signal?: AbortSignal) => {
   });
 };
 
-export const getGetApiBillsMineQueryKey = () => {
+export const getGetMyBillsQueryKey = () => {
   return [`/api/Bills/mine`] as const;
 };
 
-export const getGetApiBillsMineQueryOptions = <
-  TData = Awaited<ReturnType<typeof getApiBillsMine>>,
+export const getGetMyBillsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyBills>>,
   TError = ApiResponse,
 >(options?: {
   query?: Partial<
-    UseQueryOptions<Awaited<ReturnType<typeof getApiBillsMine>>, TError, TData>
+    UseQueryOptions<Awaited<ReturnType<typeof getMyBills>>, TError, TData>
   >;
 }) => {
   const { query: queryOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getGetApiBillsMineQueryKey();
+  const queryKey = queryOptions?.queryKey ?? getGetMyBillsQueryKey();
 
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof getApiBillsMine>>> = ({
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyBills>>> = ({
     signal,
-  }) => getApiBillsMine(signal);
+  }) => getMyBills(signal);
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof getApiBillsMine>>,
+    Awaited<ReturnType<typeof getMyBills>>,
     TError,
     TData
   > & { queryKey: DataTag<QueryKey, TData, TError> };
 };
 
-export type GetApiBillsMineQueryResult = NonNullable<
-  Awaited<ReturnType<typeof getApiBillsMine>>
+export type GetMyBillsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyBills>>
 >;
-export type GetApiBillsMineQueryError = ApiResponse;
+export type GetMyBillsQueryError = ApiResponse;
 
-export function useGetApiBillsMine<
-  TData = Awaited<ReturnType<typeof getApiBillsMine>>,
+export function useGetMyBills<
+  TData = Awaited<ReturnType<typeof getMyBills>>,
   TError = ApiResponse,
 >(
   options: {
     query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof getApiBillsMine>>,
-        TError,
-        TData
-      >
+      UseQueryOptions<Awaited<ReturnType<typeof getMyBills>>, TError, TData>
     > &
       Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getApiBillsMine>>,
+          Awaited<ReturnType<typeof getMyBills>>,
           TError,
-          Awaited<ReturnType<typeof getApiBillsMine>>
+          Awaited<ReturnType<typeof getMyBills>>
         >,
         "initialData"
       >;
@@ -558,23 +550,19 @@ export function useGetApiBillsMine<
 ): DefinedUseQueryResult<TData, TError> & {
   queryKey: DataTag<QueryKey, TData, TError>;
 };
-export function useGetApiBillsMine<
-  TData = Awaited<ReturnType<typeof getApiBillsMine>>,
+export function useGetMyBills<
+  TData = Awaited<ReturnType<typeof getMyBills>>,
   TError = ApiResponse,
 >(
   options?: {
     query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof getApiBillsMine>>,
-        TError,
-        TData
-      >
+      UseQueryOptions<Awaited<ReturnType<typeof getMyBills>>, TError, TData>
     > &
       Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getApiBillsMine>>,
+          Awaited<ReturnType<typeof getMyBills>>,
           TError,
-          Awaited<ReturnType<typeof getApiBillsMine>>
+          Awaited<ReturnType<typeof getMyBills>>
         >,
         "initialData"
       >;
@@ -583,17 +571,13 @@ export function useGetApiBillsMine<
 ): UseQueryResult<TData, TError> & {
   queryKey: DataTag<QueryKey, TData, TError>;
 };
-export function useGetApiBillsMine<
-  TData = Awaited<ReturnType<typeof getApiBillsMine>>,
+export function useGetMyBills<
+  TData = Awaited<ReturnType<typeof getMyBills>>,
   TError = ApiResponse,
 >(
   options?: {
     query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof getApiBillsMine>>,
-        TError,
-        TData
-      >
+      UseQueryOptions<Awaited<ReturnType<typeof getMyBills>>, TError, TData>
     >;
   },
   queryClient?: QueryClient,
@@ -604,24 +588,20 @@ export function useGetApiBillsMine<
  * @summary 取得當前使用者參與的帳單
  */
 
-export function useGetApiBillsMine<
-  TData = Awaited<ReturnType<typeof getApiBillsMine>>,
+export function useGetMyBills<
+  TData = Awaited<ReturnType<typeof getMyBills>>,
   TError = ApiResponse,
 >(
   options?: {
     query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof getApiBillsMine>>,
-        TError,
-        TData
-      >
+      UseQueryOptions<Awaited<ReturnType<typeof getMyBills>>, TError, TData>
     >;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & {
   queryKey: DataTag<QueryKey, TData, TError>;
 } {
-  const queryOptions = getGetApiBillsMineQueryOptions(options);
+  const queryOptions = getGetMyBillsQueryOptions(options);
 
   const query = useQuery(queryOptions, queryClient) as UseQueryResult<
     TData,
@@ -636,7 +616,7 @@ export function useGetApiBillsMine<
 /**
  * @summary 建立新帳單
  */
-export const postApiBills = (
+export const createBill = (
   createBillDto: CreateBillDto,
   signal?: AbortSignal,
 ) => {
@@ -649,23 +629,23 @@ export const postApiBills = (
   });
 };
 
-export const getPostApiBillsMutationOptions = <
+export const getCreateBillMutationOptions = <
   TError = ApiResponse,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof postApiBills>>,
+    Awaited<ReturnType<typeof createBill>>,
     TError,
     { data: CreateBillDto },
     TContext
   >;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof postApiBills>>,
+  Awaited<ReturnType<typeof createBill>>,
   TError,
   { data: CreateBillDto },
   TContext
 > => {
-  const mutationKey = ["postApiBills"];
+  const mutationKey = ["createBill"];
   const { mutation: mutationOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -675,30 +655,30 @@ export const getPostApiBillsMutationOptions = <
     : { mutation: { mutationKey } };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof postApiBills>>,
+    Awaited<ReturnType<typeof createBill>>,
     { data: CreateBillDto }
   > = (props) => {
     const { data } = props ?? {};
 
-    return postApiBills(data);
+    return createBill(data);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type PostApiBillsMutationResult = NonNullable<
-  Awaited<ReturnType<typeof postApiBills>>
+export type CreateBillMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createBill>>
 >;
-export type PostApiBillsMutationBody = CreateBillDto;
-export type PostApiBillsMutationError = ApiResponse;
+export type CreateBillMutationBody = CreateBillDto;
+export type CreateBillMutationError = ApiResponse;
 
 /**
  * @summary 建立新帳單
  */
-export const usePostApiBills = <TError = ApiResponse, TContext = unknown>(
+export const useCreateBill = <TError = ApiResponse, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof postApiBills>>,
+      Awaited<ReturnType<typeof createBill>>,
       TError,
       { data: CreateBillDto },
       TContext
@@ -706,19 +686,19 @@ export const usePostApiBills = <TError = ApiResponse, TContext = unknown>(
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
-  Awaited<ReturnType<typeof postApiBills>>,
+  Awaited<ReturnType<typeof createBill>>,
   TError,
   { data: CreateBillDto },
   TContext
 > => {
-  const mutationOptions = getPostApiBillsMutationOptions(options);
+  const mutationOptions = getCreateBillMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
 };
 /**
  * @summary 產生分享碼
  */
-export const postApiBillsIdShareCode = (id: string, signal?: AbortSignal) => {
+export const generateShareCode = (id: string, signal?: AbortSignal) => {
   return axiosInstance<ObjectApiResponse>({
     url: `/api/Bills/${id}/share-code`,
     method: "POST",
@@ -726,23 +706,23 @@ export const postApiBillsIdShareCode = (id: string, signal?: AbortSignal) => {
   });
 };
 
-export const getPostApiBillsIdShareCodeMutationOptions = <
+export const getGenerateShareCodeMutationOptions = <
   TError = ApiResponse,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof postApiBillsIdShareCode>>,
+    Awaited<ReturnType<typeof generateShareCode>>,
     TError,
     { id: string },
     TContext
   >;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof postApiBillsIdShareCode>>,
+  Awaited<ReturnType<typeof generateShareCode>>,
   TError,
   { id: string },
   TContext
 > => {
-  const mutationKey = ["postApiBillsIdShareCode"];
+  const mutationKey = ["generateShareCode"];
   const { mutation: mutationOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -752,33 +732,30 @@ export const getPostApiBillsIdShareCodeMutationOptions = <
     : { mutation: { mutationKey } };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof postApiBillsIdShareCode>>,
+    Awaited<ReturnType<typeof generateShareCode>>,
     { id: string }
   > = (props) => {
     const { id } = props ?? {};
 
-    return postApiBillsIdShareCode(id);
+    return generateShareCode(id);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type PostApiBillsIdShareCodeMutationResult = NonNullable<
-  Awaited<ReturnType<typeof postApiBillsIdShareCode>>
+export type GenerateShareCodeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateShareCode>>
 >;
 
-export type PostApiBillsIdShareCodeMutationError = ApiResponse;
+export type GenerateShareCodeMutationError = ApiResponse;
 
 /**
  * @summary 產生分享碼
  */
-export const usePostApiBillsIdShareCode = <
-  TError = ApiResponse,
-  TContext = unknown,
->(
+export const useGenerateShareCode = <TError = ApiResponse, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof postApiBillsIdShareCode>>,
+      Awaited<ReturnType<typeof generateShareCode>>,
       TError,
       { id: string },
       TContext
@@ -786,19 +763,19 @@ export const usePostApiBillsIdShareCode = <
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
-  Awaited<ReturnType<typeof postApiBillsIdShareCode>>,
+  Awaited<ReturnType<typeof generateShareCode>>,
   TError,
   { id: string },
   TContext
 > => {
-  const mutationOptions = getPostApiBillsIdShareCodeMutationOptions(options);
+  const mutationOptions = getGenerateShareCodeMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
 };
 /**
- * @summary 同步帳單（含成員、費用完整同步）
+ * @summary 同步帳單資料（增量更新）
  */
-export const postApiBillsSync = (
+export const syncBill = (
   syncBillRequestDto: SyncBillRequestDto,
   signal?: AbortSignal,
 ) => {
@@ -811,23 +788,23 @@ export const postApiBillsSync = (
   });
 };
 
-export const getPostApiBillsSyncMutationOptions = <
+export const getSyncBillMutationOptions = <
   TError = ApiResponse | ApiResponse,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof postApiBillsSync>>,
+    Awaited<ReturnType<typeof syncBill>>,
     TError,
     { data: SyncBillRequestDto },
     TContext
   >;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof postApiBillsSync>>,
+  Awaited<ReturnType<typeof syncBill>>,
   TError,
   { data: SyncBillRequestDto },
   TContext
 > => {
-  const mutationKey = ["postApiBillsSync"];
+  const mutationKey = ["syncBill"];
   const { mutation: mutationOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -837,33 +814,33 @@ export const getPostApiBillsSyncMutationOptions = <
     : { mutation: { mutationKey } };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof postApiBillsSync>>,
+    Awaited<ReturnType<typeof syncBill>>,
     { data: SyncBillRequestDto }
   > = (props) => {
     const { data } = props ?? {};
 
-    return postApiBillsSync(data);
+    return syncBill(data);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type PostApiBillsSyncMutationResult = NonNullable<
-  Awaited<ReturnType<typeof postApiBillsSync>>
+export type SyncBillMutationResult = NonNullable<
+  Awaited<ReturnType<typeof syncBill>>
 >;
-export type PostApiBillsSyncMutationBody = SyncBillRequestDto;
-export type PostApiBillsSyncMutationError = ApiResponse | ApiResponse;
+export type SyncBillMutationBody = SyncBillRequestDto;
+export type SyncBillMutationError = ApiResponse | ApiResponse;
 
 /**
- * @summary 同步帳單（含成員、費用完整同步）
+ * @summary 同步帳單資料（增量更新）
  */
-export const usePostApiBillsSync = <
+export const useSyncBill = <
   TError = ApiResponse | ApiResponse,
   TContext = unknown,
 >(
   options?: {
     mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof postApiBillsSync>>,
+      Awaited<ReturnType<typeof syncBill>>,
       TError,
       { data: SyncBillRequestDto },
       TContext
@@ -871,12 +848,98 @@ export const usePostApiBillsSync = <
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
-  Awaited<ReturnType<typeof postApiBillsSync>>,
+  Awaited<ReturnType<typeof syncBill>>,
   TError,
   { data: SyncBillRequestDto },
   TContext
 > => {
-  const mutationOptions = getPostApiBillsSyncMutationOptions(options);
+  const mutationOptions = getSyncBillMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+/**
+ * @summary Delta 同步帳單資料（v3.2 新機制）
+ */
+export const deltaSyncBill = (
+  id: string,
+  deltaSyncRequest: DeltaSyncRequest,
+  signal?: AbortSignal,
+) => {
+  return axiosInstance<DeltaSyncResponseApiResponse>({
+    url: `/api/Bills/${id}/delta-sync`,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: deltaSyncRequest,
+    signal,
+  });
+};
+
+export const getDeltaSyncBillMutationOptions = <
+  TError = ApiResponse | ApiResponse,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deltaSyncBill>>,
+    TError,
+    { id: string; data: DeltaSyncRequest },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deltaSyncBill>>,
+  TError,
+  { id: string; data: DeltaSyncRequest },
+  TContext
+> => {
+  const mutationKey = ["deltaSyncBill"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deltaSyncBill>>,
+    { id: string; data: DeltaSyncRequest }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return deltaSyncBill(id, data);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeltaSyncBillMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deltaSyncBill>>
+>;
+export type DeltaSyncBillMutationBody = DeltaSyncRequest;
+export type DeltaSyncBillMutationError = ApiResponse | ApiResponse;
+
+/**
+ * @summary Delta 同步帳單資料（v3.2 新機制）
+ */
+export const useDeltaSyncBill = <
+  TError = ApiResponse | ApiResponse,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deltaSyncBill>>,
+      TError,
+      { id: string; data: DeltaSyncRequest },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof deltaSyncBill>>,
+  TError,
+  { id: string; data: DeltaSyncRequest },
+  TContext
+> => {
+  const mutationOptions = getDeltaSyncBillMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
 };

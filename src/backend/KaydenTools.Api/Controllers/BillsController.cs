@@ -31,7 +31,7 @@ public class BillsController : ControllerBase
     /// <param name="id">帳單 ID</param>
     /// <param name="ct">取消令牌</param>
     /// <returns>帳單詳情</returns>
-    [HttpGet("{id:guid}")]
+    [HttpGet("{id:guid}", Name = "GetBillById")]
     [ProducesResponseType(typeof(ApiResponse<BillDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
@@ -51,7 +51,7 @@ public class BillsController : ControllerBase
     /// <param name="shareCode">分享碼</param>
     /// <param name="ct">取消令牌</param>
     /// <returns>帳單詳情</returns>
-    [HttpGet("share/{shareCode}")]
+    [HttpGet("share/{shareCode}", Name = "GetBillByShareCode")]
     [ProducesResponseType(typeof(ApiResponse<BillDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetByShareCode(string shareCode, CancellationToken ct)
@@ -70,7 +70,7 @@ public class BillsController : ControllerBase
     /// </summary>
     /// <param name="ct">取消令牌</param>
     /// <returns>帳單列表</returns>
-    [HttpGet("mine")]
+    [HttpGet("mine", Name = "GetMyBills")]
     [Authorize]
     [ProducesResponseType(typeof(ApiResponse<IReadOnlyList<BillDto>>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status401Unauthorized)]
@@ -93,7 +93,7 @@ public class BillsController : ControllerBase
     /// <param name="dto">帳單資料</param>
     /// <param name="ct">取消令牌</param>
     /// <returns>新建立的帳單</returns>
-    [HttpPost]
+    [HttpPost(Name = "CreateBill")]
     [ProducesResponseType(typeof(ApiResponse<BillDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateBillDto dto, CancellationToken ct)
@@ -117,7 +117,7 @@ public class BillsController : ControllerBase
     /// <param name="dto">更新資料</param>
     /// <param name="ct">取消令牌</param>
     /// <returns>更新後的帳單</returns>
-    [HttpPut("{id:guid}")]
+    [HttpPut("{id:guid}", Name = "UpdateBill")]
     [ProducesResponseType(typeof(ApiResponse<BillDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateBillDto dto, CancellationToken ct)
@@ -136,7 +136,7 @@ public class BillsController : ControllerBase
     /// </summary>
     /// <param name="id">帳單 ID</param>
     /// <param name="ct">取消令牌</param>
-    [HttpDelete("{id:guid}")]
+    [HttpDelete("{id:guid}", Name = "DeleteBill")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
@@ -156,7 +156,7 @@ public class BillsController : ControllerBase
     /// <param name="id">帳單 ID</param>
     /// <param name="ct">取消令牌</param>
     /// <returns>分享碼</returns>
-    [HttpPost("{id:guid}/share-code")]
+    [HttpPost("{id:guid}/share-code", Name = "GenerateShareCode")]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GenerateShareCode(Guid id, CancellationToken ct)
@@ -171,17 +171,25 @@ public class BillsController : ControllerBase
     }
 
     /// <summary>
-    /// 同步帳單（含成員、費用完整同步）
+    /// 同步帳單資料（增量更新）
     /// </summary>
-    /// <param name="dto">同步請求資料</param>
+    /// <param name="request">同步請求資料</param>
     /// <param name="ct">取消令牌</param>
-    /// <returns>同步結果（含 ID 映射）</returns>
-    [HttpPost("sync")]
+    /// <returns>同步結果</returns>
+    [HttpPost("sync", Name = "SyncBill")]
     [ProducesResponseType(typeof(ApiResponse<SyncBillResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Sync([FromBody] SyncBillRequestDto request, CancellationToken ct)
     {
+        if (!ModelState.IsValid)
+        {
+            var errors = string.Join("; ", ModelState.Values
+                .SelectMany(v => v.Errors)
+                .Select(e => e.ErrorMessage));
+            return BadRequest(ApiResponse.Fail(ErrorCodes.ValidationError, $"Validation failed: {errors}"));
+        }
+
         var result = await _billService.SyncBillAsync(request, _currentUserService.UserId, ct);
         if (result.IsFailure)
         {
@@ -189,10 +197,40 @@ public class BillsController : ControllerBase
             {
                 return NotFound(ApiResponse.Fail(result.Error.Code, result.Error.Message));
             }
-
             return BadRequest(ApiResponse.Fail(result.Error.Code, result.Error.Message));
         }
 
         return Ok(ApiResponse<SyncBillResponseDto>.Ok(result.Value));
+    }
+
+    /// <summary>
+    /// Delta 同步帳單資料（v3.2 新機制）
+    /// </summary>
+    /// <param name="id">帳單 ID</param>
+    /// <param name="request">Delta 同步請求</param>
+    /// <param name="ct">取消令牌</param>
+    /// <returns>同步回應，包含新版本號與 ID 映射</returns>
+    [HttpPost("{id:guid}/delta-sync", Name = "DeltaSyncBill")]
+    [ProducesResponseType(typeof(ApiResponse<DeltaSyncResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeltaSync(Guid id, [FromBody] DeltaSyncRequest request, CancellationToken ct)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ApiResponse.Fail(ErrorCodes.ValidationError, "Validation failed."));
+        }
+
+        var result = await _billService.DeltaSyncAsync(id, request, _currentUserService.UserId, ct);
+        if (result.IsFailure)
+        {
+            if (result.Error.Code == ErrorCodes.BillNotFound)
+            {
+                return NotFound(ApiResponse.Fail(result.Error.Code, result.Error.Message));
+            }
+            return BadRequest(ApiResponse.Fail(result.Error.Code, result.Error.Message));
+        }
+
+        return Ok(ApiResponse<DeltaSyncResponse>.Ok(result.Value));
     }
 }

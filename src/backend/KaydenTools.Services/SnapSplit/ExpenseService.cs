@@ -104,8 +104,8 @@ public class ExpenseService : IExpenseService
         {
             foreach (var itemDto in dto.Items)
             {
-                // 驗證細項付款者
-                if (!memberIds.Contains(itemDto.PaidById))
+                // 驗證細項付款者（如有指定）
+                if (itemDto.PaidById.HasValue && !memberIds.Contains(itemDto.PaidById.Value))
                 {
                     return Result.Failure<ExpenseDto>(ErrorCodes.MemberNotFound, $"Item payer {itemDto.PaidById} not found in this bill.");
                 }
@@ -204,8 +204,8 @@ public class ExpenseService : IExpenseService
             expense.Items.Clear();
             foreach (var itemDto in dto.Items)
             {
-                // 驗證細項付款者
-                if (!memberIds.Contains(itemDto.PaidById))
+                // 驗證細項付款者（如有指定）
+                if (itemDto.PaidById.HasValue && !memberIds.Contains(itemDto.PaidById.Value))
                 {
                     return Result.Failure<ExpenseDto>(ErrorCodes.MemberNotFound, $"Item payer {itemDto.PaidById} not found in this bill.");
                 }

@@ -42,7 +42,7 @@ type SimpleExpenseFormState = ExpenseFormState & {
 const emptyForm: SimpleExpenseFormState = {
     name: '',
     amount: '',
-    paidBy: '',
+    paidById: '',
     participants: [],
     serviceFeePercent: '0',
 };
@@ -84,7 +84,7 @@ export function ExpenseList({ bill, isReadOnly = false, onOpenMemberDialog, onOp
         setEditingExpense(null);
         setForm({
             ...emptyForm,
-            paidBy: bill.members[0]?.id || '',
+            paidById: bill.members[0]?.id || '',
             participants: [],
             serviceFeePercent: '0',
         });
@@ -112,7 +112,7 @@ export function ExpenseList({ bill, isReadOnly = false, onOpenMemberDialog, onOp
             setForm({
                 name: expense.name,
                 amount: expense.amount.toString(),
-                paidBy: expense.paidBy,
+                paidById: expense.paidById,
                 participants: [...expense.participants],
                 serviceFeePercent: (expense.serviceFeePercent ?? 0).toString(),
             });
@@ -121,14 +121,14 @@ export function ExpenseList({ bill, isReadOnly = false, onOpenMemberDialog, onOp
     };
 
     const handleSubmit = () => {
-        if (!form.name.trim() || evaluatedAmount === null || !form.paidBy || form.participants.length === 0) {
+        if (!form.name.trim() || evaluatedAmount === null || !form.paidById || form.participants.length === 0) {
             return;
         }
 
         const expenseData: Omit<Expense, 'id'> = {
             name: form.name.trim(),
             amount: evaluatedAmount,
-            paidBy: form.paidBy,
+            paidById: form.paidById,
             participants: form.participants,
             serviceFeePercent: Math.max(0, Number(form.serviceFeePercent) || 0),
             isItemized: false,
@@ -158,14 +158,14 @@ export function ExpenseList({ bill, isReadOnly = false, onOpenMemberDialog, onOp
         setDeletingExpense(null);
     };
 
-    const isFormValid = form.name.trim() && evaluatedAmount !== null && form.paidBy && form.participants.length > 0;
+    const isFormValid = form.name.trim() && evaluatedAmount !== null && form.paidById && form.participants.length > 0;
 
     const renderExpenseInfo = (expense: Expense) => {
         // 取得摘要文字
         let summaryText: string;
 
         if (expense.isItemized) {
-            const uniquePayers = [...new Set(expense.items.map(item => item.paidBy))];
+            const uniquePayers = [...new Set(expense.items.map(item => item.paidById))];
             if (uniquePayers.length === 0) {
                 summaryText = '尚未指定付款人';
             } else if (uniquePayers.length === 1) {
@@ -174,7 +174,7 @@ export function ExpenseList({ bill, isReadOnly = false, onOpenMemberDialog, onOp
                 summaryText = `${uniquePayers.length} 人分別先付`;
             }
         } else {
-            const payerName = getMemberName(bill.members, expense.paidBy);
+            const payerName = getMemberName(bill.members, expense.paidById);
             const participantCount = expense.participants.length;
 
             if (participantCount === 0) {
@@ -183,7 +183,7 @@ export function ExpenseList({ bill, isReadOnly = false, onOpenMemberDialog, onOp
                 summaryText = `${payerName} 先付，大家平分`;
             } else if (participantCount === 1) {
                 const participantName = getMemberName(bill.members, expense.participants[0]);
-                if (expense.participants[0] === expense.paidBy) {
+                if (expense.participants[0] === expense.paidById) {
                     summaryText = `${payerName} 自己付`;
                 } else {
                     summaryText = `${payerName} 幫 ${participantName} 付`;
@@ -277,19 +277,19 @@ export function ExpenseList({ bill, isReadOnly = false, onOpenMemberDialog, onOp
                                 }}
                             >
                                 <Avatar
-                                    src={bill.members.find(m => m.id === expense.paidBy)?.avatarUrl}
+                                    src={bill.members.find(m => m.id === expense.paidById)?.avatarUrl}
                                     sx={{
-                                        bgcolor: getMemberColor(expense.paidBy, bill.members),
+                                        bgcolor: getMemberColor(expense.paidById, bill.members),
                                         width: 40,
                                         height: 40,
                                         fontSize: '1rem',
                                         fontWeight: 600,
                                         // 離線效果
-                                        opacity: isMemberOffline(expense.paidBy) ? 0.6 : 1,
-                                        filter: isMemberOffline(expense.paidBy) ? 'grayscale(30%)' : 'none',
+                                        opacity: isMemberOffline(expense.paidById) ? 0.6 : 1,
+                                        filter: isMemberOffline(expense.paidById) ? 'grayscale(30%)' : 'none',
                                     }}
                                 >
-                                    {getMemberName(bill.members, expense.paidBy).charAt(0).toUpperCase()}
+                                    {getMemberName(bill.members, expense.paidById).charAt(0).toUpperCase()}
                                 </Avatar>
 
                                 {renderExpenseInfo(expense)}

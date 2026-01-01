@@ -10,7 +10,8 @@ export interface CreateExpenseItemDto {
   /** @nullable */
   name?: string | null;
   amount?: number;
-  paidById?: string;
+  /** @nullable */
+  paidById?: string | null;
   /** @nullable */
   participantIds?: string[] | null;
 }

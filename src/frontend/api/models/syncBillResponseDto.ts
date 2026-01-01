@@ -6,11 +6,14 @@
  * OpenAPI spec version: v1
  */
 import type { SyncIdMappingsDto } from "./syncIdMappingsDto";
+import type { BillDto } from "./billDto";
 
 export interface SyncBillResponseDto {
   remoteId?: string;
+  version?: number;
   /** @nullable */
   shareCode?: string | null;
   idMappings?: SyncIdMappingsDto;
   serverTimestamp?: string;
+  latestBill?: BillDto;
 }

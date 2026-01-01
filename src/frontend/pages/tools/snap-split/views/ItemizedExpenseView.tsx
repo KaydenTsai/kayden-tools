@@ -42,7 +42,7 @@ export function ItemizedExpenseView({ bill, expenseId, onClose }: ItemizedExpens
     const [quickAdd, setQuickAdd] = useState<ExpenseFormState>({
         name: '',
         amount: '',
-        paidBy: bill.members[0]?.id || '',
+        paidById: bill.members[0]?.id || '',
         participants: [],
     });
 
@@ -61,7 +61,7 @@ export function ItemizedExpenseView({ bill, expenseId, onClose }: ItemizedExpens
     // 快速新增品項
     const handleQuickAdd = useCallback(() => {
         const amount = parseAmount(quickAdd.amount.toString());
-        if (!quickAdd.name.trim() || amount === null || !quickAdd.paidBy || quickAdd.participants.length === 0) {
+        if (!quickAdd.name.trim() || amount === null || !quickAdd.paidById || quickAdd.participants.length === 0) {
             return;
         }
 
@@ -70,7 +70,7 @@ export function ItemizedExpenseView({ bill, expenseId, onClose }: ItemizedExpens
             tempId: crypto.randomUUID(),
             name: quickAdd.name.trim(),
             amount,
-            paidBy: quickAdd.paidBy,
+            paidById: quickAdd.paidById,
             participants: quickAdd.participants,
         };
 
@@ -80,7 +80,7 @@ export function ItemizedExpenseView({ bill, expenseId, onClose }: ItemizedExpens
         setQuickAdd(prev => ({
             name: '',
             amount: '',
-            paidBy: prev.paidBy,
+            paidById: prev.paidById,
             participants: prev.participants,
         }));
 
@@ -138,7 +138,7 @@ export function ItemizedExpenseView({ bill, expenseId, onClose }: ItemizedExpens
             serviceFeePercent: serviceFeeValue,
             isItemized: true,
             amount: itemsSubtotal,
-            paidBy: '',
+            paidById: '',
             participants: [],
             items: items.map(({ tempId, ...item }) => item),
         };
@@ -157,8 +157,8 @@ export function ItemizedExpenseView({ bill, expenseId, onClose }: ItemizedExpens
     const quickAddAmountValue = parseAmount(quickAdd.amount.toString());
 
     // 取得品項摘要文字
-    const getItemSummaryText = (paidBy: string, participants: string[]) => {
-        const payerName = getMemberName(bill.members, paidBy);
+    const getItemSummaryText = (paidById: string, participants: string[]) => {
+        const payerName = getMemberName(bill.members, paidById);
 
         if (participants.length === 0) {
             return `${payerName} 付款（未指定平分）`;
@@ -168,7 +168,7 @@ export function ItemizedExpenseView({ bill, expenseId, onClose }: ItemizedExpens
         }
         if (participants.length === 1) {
             const participantName = getMemberName(bill.members, participants[0]);
-            if (participants[0] === paidBy) {
+            if (participants[0] === paidById) {
                 return `${payerName} 自己付`;
             }
             return `${payerName} 幫 ${participantName} 付`;
@@ -269,7 +269,7 @@ export function ItemizedExpenseView({ bill, expenseId, onClose }: ItemizedExpens
                                 onClick={() => setQuickAdd(prev => ({
                                     name: '',
                                     amount: '',
-                                    paidBy: prev.paidBy,
+                                    paidById: prev.paidById,
                                     participants: prev.participants,
                                 }))}
                                 sx={{ color: 'text.secondary' }}
@@ -282,7 +282,7 @@ export function ItemizedExpenseView({ bill, expenseId, onClose }: ItemizedExpens
                             variant="contained"
                             startIcon={<AddIcon />}
                             onClick={handleQuickAdd}
-                            disabled={!quickAdd.name.trim() || quickAddAmountValue === null || !quickAdd.paidBy || quickAdd.participants.length === 0}
+                            disabled={!quickAdd.name.trim() || quickAddAmountValue === null || !quickAdd.paidById || quickAdd.participants.length === 0}
                         >
                             新增此品項
                         </Button>
@@ -334,7 +334,7 @@ export function ItemizedExpenseView({ bill, expenseId, onClose }: ItemizedExpens
                                         {item.name}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary">
-                                        {getItemSummaryText(item.paidBy, item.participants)}
+                                        {getItemSummaryText(item.paidById, item.participants)}
                                     </Typography>
                                 </Box>
                                 <Typography fontWeight={700} color="primary.main">
@@ -354,7 +354,7 @@ export function ItemizedExpenseView({ bill, expenseId, onClose }: ItemizedExpens
                                             values={{
                                                 name: item.name,
                                                 amount: item.amount,
-                                                paidBy: item.paidBy,
+                                                paidById: item.paidById,
                                                 participants: item.participants
                                             }}
                                             onChange={(updates) => {

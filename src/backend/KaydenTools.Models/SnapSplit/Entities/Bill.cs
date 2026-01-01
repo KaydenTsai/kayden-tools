@@ -32,6 +32,16 @@ public class Bill : IEntity, IAuditableEntity, ISoftDeletable
     /// </summary>
     public long Version { get; set; } = 1;
 
+    /// <summary>
+    /// 已壓縮的操作版本號（用於操作日誌壓縮追蹤）
+    /// </summary>
+    public long CompactedAtVersion { get; set; } = 0;
+
+    /// <summary>
+    /// 是否已結算
+    /// </summary>
+    public bool IsSettled { get; set; }
+
     // Audit
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
@@ -54,7 +64,12 @@ public class Bill : IEntity, IAuditableEntity, ISoftDeletable
     public ICollection<Expense> Expenses { get; set; } = new List<Expense>();
 
     /// <summary>
-    /// 結算集合
+    /// 已結清轉帳集合
     /// </summary>
-    public ICollection<Settlement> Settlements { get; set; } = new List<Settlement>();
+    public ICollection<SettledTransfer> SettledTransfers { get; set; } = new List<SettledTransfer>();
+
+    /// <summary>
+    /// 操作日誌集合 (V3)
+    /// </summary>
+    public ICollection<Operation> Operations { get; set; } = new List<Operation>();
 }

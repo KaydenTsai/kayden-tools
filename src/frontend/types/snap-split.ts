@@ -23,7 +23,8 @@ export interface ExpenseItem {
     id: string;
     name: string;
     amount: number;
-    paidBy: string;
+    /** 付款者 Member ID（可為空） */
+    paidById: string;
     participants: string[];
     /** 遠端 ID（同步後設定） */
     remoteId?: string;
@@ -35,11 +36,14 @@ export interface Expense {
     serviceFeePercent: number;
     isItemized: boolean;
     amount: number;
-    paidBy: string;
+    /** 付款者 Member ID（可為空） */
+    paidById: string;
     participants: string[];
     items: ExpenseItem[];
     /** 遠端 ID（同步後設定） */
     remoteId?: string;
+    /** 待同步的刪除項目 ID 清單 (優先使用 Remote IDs) */
+    deletedItemIds?: string[];
 }
 
 export interface Bill {
@@ -58,6 +62,16 @@ export interface Bill {
     shareCode?: string;
     /** 最後同步時間 */
     lastSyncedAt?: string;
+    /** 版本號（用於樂觀鎖同步） */
+    version: number;
+    /** 待同步的刪除項目 ID 清單 (Remote IDs) */
+    deletedMemberIds?: string[];
+    /** 待同步的刪除項目 ID 清單 (Remote IDs) */
+    deletedExpenseIds?: string[];
+    /** 待同步的取消結算清單 (from-to 格式) */
+    unsettledTransfers?: string[];
+    /** 本地修訂版號 (用於同步競態條件檢查) */
+    _rev?: number;
     /** 同步錯誤訊息 */
     syncError?: string;
     /** 帳單擁有者 User ID */

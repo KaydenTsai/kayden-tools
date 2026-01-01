@@ -1,62 +1,17 @@
 import type { Bill, SyncStatus } from '@/types/snap-split';
 import type { IdMappings } from '@/stores/snapSplitStore';
-import type { BillDto } from '@/api/models';
+import type {
+    BillDto,
+    SyncBillRequestDto,
+    SyncBillResponseDto,
+    SyncMemberCollectionDto,
+    SyncExpenseCollectionDto,
+    SyncExpenseItemCollectionDto,
+} from '@/api/models';
+import { calculateSettlement } from '@/utils/settlement';
 
-/** 同步請求 DTO */
-export interface SyncBillRequestDto {
-    remoteId?: string;
-    localId: string;
-    name: string;
-    members: SyncMemberDto[];
-    expenses: SyncExpenseDto[];
-    settledTransfers: string[];
-    localUpdatedAt: string;
-}
-
-/** 同步成員 DTO */
-export interface SyncMemberDto {
-    localId: string;
-    remoteId?: string;
-    name: string;
-    displayOrder: number;
-    linkedUserId?: string;
-    claimedAt?: string;
-}
-
-/** 同步費用 DTO */
-export interface SyncExpenseDto {
-    localId: string;
-    remoteId?: string;
-    name: string;
-    amount: number;
-    serviceFeePercent: number;
-    isItemized: boolean;
-    paidByLocalId?: string;
-    participantLocalIds: string[];
-    items?: SyncExpenseItemDto[];
-}
-
-/** 同步費用細項 DTO */
-export interface SyncExpenseItemDto {
-    localId: string;
-    remoteId?: string;
-    name: string;
-    amount: number;
-    paidByLocalId: string;
-    participantLocalIds: string[];
-}
-
-/** 同步回應 DTO */
-export interface SyncBillResponseDto {
-    remoteId: string;
-    shareCode?: string;
-    idMappings: {
-        members: Record<string, string>;
-        expenses: Record<string, string>;
-        expenseItems: Record<string, string>;
-    };
-    serverTimestamp: string;
-}
+// Re-export for convenience
+export type { SyncBillRequestDto, SyncBillResponseDto };
 
 /**
  * 後端 BillDto → 前端 Bill
@@ -83,13 +38,13 @@ export function billDtoToBill(dto: BillDto, syncStatus: SyncStatus = 'synced'): 
             amount: e.amount ?? 0,
             serviceFeePercent: e.serviceFeePercent ?? 0,
             isItemized: e.isItemized ?? false,
-            paidBy: e.paidById ?? '',
+            paidById: e.paidById ?? '',
             participants: e.participantIds ?? [],
             items: (e.items ?? []).map(item => ({
                 id: item.id ?? crypto.randomUUID(),
                 name: item.name ?? '',
                 amount: item.amount ?? 0,
-                paidBy: item.paidById ?? '',
+                paidById: item.paidById ?? '',
                 participants: item.participantIds ?? [],
                 remoteId: item.id,
             })),
@@ -101,57 +56,139 @@ export function billDtoToBill(dto: BillDto, syncStatus: SyncStatus = 'synced'): 
         syncStatus,
         remoteId: dto.id,
         shareCode: dto.shareCode ?? undefined,
+        version: dto.version ?? 0,
         lastSyncedAt: new Date().toISOString(),
     };
+}
+
+/**
+ * 將 settledTransfers 轉換為新格式（加入金額快照）
+ * 新格式：`fromId-toId:amount`
+ */
+function formatSettledTransfersWithAmount(bill: Bill): string[] {
+    if (!bill.settledTransfers || bill.settledTransfers.length === 0) {
+        return [];
+    }
+
+    // 計算當前結算結果以獲取金額
+    const settlement = bill.expenses.length > 0 ? calculateSettlement(bill) : null;
+    const transferMap = new Map<string, number>();
+
+    // 建立 from-to -> amount 的映射
+    if (settlement) {
+        for (const t of settlement.transfers) {
+            transferMap.set(`${t.from}-${t.to}`, t.amount);
+        }
+    }
+
+    // 轉換為新格式，優先使用 remoteId
+    return bill.settledTransfers.map(st => {
+        // 解析現有格式：可能是 "from-to" 或已經是 "from-to:amount"
+        const colonIndex = st.lastIndexOf(':');
+        let fromTo: string;
+        let existingAmount: number | undefined;
+
+        if (colonIndex > 0 && !isNaN(parseFloat(st.substring(colonIndex + 1)))) {
+            // 已經是新格式
+            fromTo = st.substring(0, colonIndex);
+            existingAmount = parseFloat(st.substring(colonIndex + 1));
+        } else {
+            fromTo = st;
+        }
+
+        // 嘗試找到對應的金額（優先使用計算結果，其次使用已存在的金額）
+        const amount = transferMap.get(fromTo) ?? existingAmount ?? 0;
+
+        // 嘗試將 localId 轉換為 remoteId
+        const [fromId, toId] = fromTo.split('-');
+        const fromMember = bill.members.find(m => m.id === fromId);
+        const toMember = bill.members.find(m => m.id === toId);
+
+        // 優先使用 remoteId，如果沒有則使用 localId
+        const finalFromId = fromMember?.remoteId || fromId;
+        const finalToId = toMember?.remoteId || toId;
+
+        return `${finalFromId}-${finalToId}:${amount.toFixed(2)}`;
+    });
 }
 
 /**
  * 前端 Bill → 同步請求 DTO
  */
 export function billToSyncRequest(bill: Bill): SyncBillRequestDto {
-    return {
-        remoteId: bill.remoteId,
-        localId: bill.id,
-        name: bill.name,
-        members: bill.members.map((m, index) => ({
+    const members: SyncMemberCollectionDto = {
+        // 重要：同步時一律送出所有成員，確保後端能建立完整的 LocalId -> RemoteId 映射表
+        // 這對於正確關聯費用 (PaidBy, Participants) 至關重要
+        upsert: bill.members.map((m, index) => ({
             localId: m.id,
-            remoteId: m.remoteId,
+            remoteId: m.remoteId || undefined,
             name: m.name,
             displayOrder: index,
-            linkedUserId: m.userId,
-            claimedAt: m.claimedAt,
+            linkedUserId: m.userId || undefined,
+            claimedAt: m.claimedAt || undefined,
         })),
-        expenses: bill.expenses.map(e => ({
-            localId: e.id,
-            remoteId: e.remoteId,
-            name: e.name,
-            amount: e.amount,
-            serviceFeePercent: e.serviceFeePercent,
-            isItemized: e.isItemized,
-            paidByLocalId: e.paidBy || undefined,
-            participantLocalIds: e.participants,
-            items: e.isItemized ? e.items.map(item => ({
-                localId: item.id,
-                remoteId: item.remoteId,
-                name: item.name,
-                amount: item.amount,
-                paidByLocalId: item.paidBy,
-                participantLocalIds: item.participants,
-            })) : undefined,
-        })),
-        settledTransfers: bill.settledTransfers,
+        deletedIds: (bill.deletedMemberIds || []).filter(id => !!id),
+    };
+
+    const expenses: SyncExpenseCollectionDto = {
+        upsert: bill.expenses.map(e => {
+            const items: SyncExpenseItemCollectionDto | undefined = e.isItemized ? {
+                upsert: e.items.map(item => ({
+                    localId: item.id,
+                    remoteId: item.remoteId || undefined,
+                    name: item.name,
+                    amount: item.amount,
+                    paidByLocalId: item.paidById,
+                    participantLocalIds: item.participants,
+                })),
+                // 使用追蹤的 deletedItemIds（已優先使用 remoteId）
+                deletedIds: (e.deletedItemIds || []).filter(id => !!id),
+            } : undefined;
+
+            return {
+                localId: e.id,
+                remoteId: e.remoteId || undefined,
+                name: e.name,
+                amount: e.amount,
+                serviceFeePercent: e.serviceFeePercent,
+                isItemized: e.isItemized,
+                // 確保傳送的是 Member 的 LocalId (id)，而非 userId
+                paidByLocalId: e.paidById || undefined,
+                participantLocalIds: e.participants,
+                items: items,
+            };
+        }),
+        deletedIds: (bill.deletedExpenseIds || []).filter(id => !!id),
+    };
+
+    const request: SyncBillRequestDto = {
+        remoteId: bill.remoteId || undefined,
+        localId: bill.id,
+        baseVersion: bill.version || 0,
+        name: bill.name,
+        members,
+        expenses,
+        // 使用新格式：加入金額快照
+        settledTransfers: formatSettledTransfersWithAmount(bill),
         localUpdatedAt: bill.updatedAt,
     };
+
+    if (import.meta.env.DEV) {
+        console.log('[Adapter] Generated Sync Request:', JSON.stringify(request, null, 2));
+    }
+
+    return request;
 }
 
 /**
  * 將同步回應的 ID 映射轉換為 store 可用格式
  */
 export function responseToIdMappings(response: SyncBillResponseDto): IdMappings {
+    const idMappings = response.idMappings ?? { members: {}, expenses: {}, expenseItems: {} };
     return {
-        members: response.idMappings.members,
-        expenses: response.idMappings.expenses,
-        expenseItems: response.idMappings.expenseItems,
+        members: (idMappings.members ?? {}) as Record<string, string>,
+        expenses: (idMappings.expenses ?? {}) as Record<string, string>,
+        expenseItems: (idMappings.expenseItems ?? {}) as Record<string, string>,
     };
 }
 

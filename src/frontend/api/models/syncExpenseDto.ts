@@ -5,7 +5,7 @@
  * KaydenTools Backend API - SnapSplit, Authentication, and more.
  * OpenAPI spec version: v1
  */
-import type { SyncExpenseItemDto } from "./syncExpenseItemDto";
+import type { SyncExpenseItemCollectionDto } from "./syncExpenseItemCollectionDto";
 
 export interface SyncExpenseDto {
   /** @nullable */
@@ -21,6 +21,5 @@ export interface SyncExpenseDto {
   paidByLocalId?: string | null;
   /** @nullable */
   participantLocalIds?: string[] | null;
-  /** @nullable */
-  items?: SyncExpenseItemDto[] | null;
+  items?: SyncExpenseItemCollectionDto;
 }

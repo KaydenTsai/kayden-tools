@@ -42,9 +42,8 @@ public class SettlementService : ISettlementService
         }
 
         // 取得已結清的轉帳記錄
-        var settlements = await _unitOfWork.Settlements.GetByBillIdAsync(billId, ct);
-        var settledSet = settlements
-            .Where(s => s.IsSettled)
+        var settledTransfers = await _unitOfWork.SettledTransfers.GetByBillIdAsync(billId, ct);
+        var settledSet = settledTransfers
             .Select(s => (s.FromMemberId, s.ToMemberId))
             .ToHashSet();
 
@@ -85,32 +84,27 @@ public class SettlementService : ISettlementService
             return Result.Failure(ErrorCodes.MemberNotFound, "To member not found in this bill.");
         }
 
-        // 尋找或建立結算記錄
-        var settlement = await _unitOfWork.Settlements.GetByMembersAsync(billId, fromMemberId, toMemberId, ct);
+        // 尋找現有的已結清記錄
+        var settledTransfer = await _unitOfWork.SettledTransfers.GetByKeyAsync(billId, fromMemberId, toMemberId, ct);
 
-        if (settlement == null)
+        if (settledTransfer == null)
         {
-            // 建立新的結算記錄（標記為已結清）
-            settlement = new Settlement
+            // 建立新的已結清記錄
+            settledTransfer = new SettledTransfer
             {
-                Id = Guid.NewGuid(),
                 BillId = billId,
                 FromMemberId = fromMemberId,
                 ToMemberId = toMemberId,
                 Amount = 0, // 金額在 CalculateAsync 中動態計算
-                IsSettled = true,
                 SettledAt = _dateTimeService.UtcNow
             };
 
-            await _unitOfWork.Settlements.AddAsync(settlement, ct);
+            await _unitOfWork.SettledTransfers.AddAsync(settledTransfer);
         }
         else
         {
-            // 切換結清狀態
-            settlement.IsSettled = !settlement.IsSettled;
-            settlement.SettledAt = settlement.IsSettled ? _dateTimeService.UtcNow : null;
-
-            _unitOfWork.Settlements.Update(settlement);
+            // 已存在則移除（取消結清）
+            _unitOfWork.SettledTransfers.Remove(settledTransfer);
         }
 
         await _unitOfWork.SaveChangesAsync(ct);
@@ -230,8 +224,8 @@ public class SettlementService : ISettlementService
             totalAmount += item.Amount;
             totalWithServiceFee += itemWithFee;
 
-            // 付款人增加實付
-            if (summaryMap.TryGetValue(item.PaidById, out var payer))
+            // 付款人增加實付（如果有指定付款者）
+            if (item.PaidById.HasValue && summaryMap.TryGetValue(item.PaidById.Value, out var payer))
             {
                 payer.TotalPaid += itemWithFee;
             }

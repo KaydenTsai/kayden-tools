@@ -67,10 +67,19 @@ public interface IBillService
     Task<Result<string>> GenerateShareCodeAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>
-    /// 同步帳單（含成員、費用完整同步）
+    /// 同步帳單資料（增量更新）
     /// </summary>
     /// <param name="dto">同步請求資料</param>
-    /// <param name="ownerId">擁有者 ID</param>
+    /// <param name="ownerId">當前使用者 ID</param>
     /// <param name="ct">取消令牌</param>
     Task<Result<SyncBillResponseDto>> SyncBillAsync(SyncBillRequestDto dto, Guid? ownerId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Delta 同步帳單資料（v3.2 新機制）
+    /// </summary>
+    /// <param name="billId">帳單 ID</param>
+    /// <param name="request">Delta 同步請求</param>
+    /// <param name="userId">當前使用者 ID</param>
+    /// <param name="ct">取消令牌</param>
+    Task<Result<DeltaSyncResponse>> DeltaSyncAsync(Guid billId, DeltaSyncRequest request, Guid? userId, CancellationToken ct = default);
 }

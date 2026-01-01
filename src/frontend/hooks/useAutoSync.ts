@@ -2,55 +2,27 @@ import { useEffect, useRef } from 'react';
 import { useSnapSplitStore } from '@/stores/snapSplitStore';
 import { useBillSync } from './useBillSync';
 
-const AUTO_SYNC_DEBOUNCE_MS = 2000;
+const AUTO_SYNC_INTERVAL_MS = 3000; // 每 3 秒檢查一次
 
 /**
- * 自動同步 Hook
- * 登入用戶的帳單自動同步到雲端：
- * - 新建立的帳單（local, 無 remoteId）
- * - 已同步但被修改的帳單（modified, 有 remoteId）
+ * 自動同步 Hook（使用 Interval 避免 effect 無限觸發）
  */
 export function useAutoSync(isAuthenticated: boolean) {
-    const bills = useSnapSplitStore(state => state.bills);
-    const { syncBill, isUploading } = useBillSync();
-    const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const { syncBill } = useBillSync();
     const syncingBillIds = useRef<Set<string>>(new Set());
-    const isUploadingRef = useRef(isUploading);
     const syncBillRef = useRef(syncBill);
 
     // 更新 ref 以避免 stale closure
-    isUploadingRef.current = isUploading;
     syncBillRef.current = syncBill;
 
-    // 找出需要自動同步的帳單 ID（用 ID 比較避免物件引用問題）
-    const billIdsToSync = bills
-        .filter(bill => {
-            if (bill.isSnapshot) return false;
-            if (bill.remoteId && bill.syncStatus === 'modified') return true;
-            if (!bill.remoteId && bill.syncStatus === 'local') return true;
-            return false;
-        })
-        .map(b => b.id);
-
     useEffect(() => {
-        if (!isAuthenticated || billIdsToSync.length === 0) {
-            return;
-        }
+        if (!isAuthenticated) return;
 
-        if (import.meta.env.DEV) {
-            console.log('[AutoSync] Bills to sync:', billIdsToSync);
-        }
-
-        // 清除之前的 timeout
-        if (syncTimeoutRef.current) {
-            clearTimeout(syncTimeoutRef.current);
-        }
-
-        // Debounce：等待用戶停止編輯後再同步
-        syncTimeoutRef.current = setTimeout(async () => {
-            if (isUploadingRef.current) {
+        const checkAndSync = async () => {
+            // 如果已經有正在同步的帳單，跳過這次檢查
+            if (syncingBillIds.current.size > 0) {
                 if (import.meta.env.DEV) {
-                    console.log('[AutoSync] Skipped - already uploading');
+                    console.log('[AutoSync] Skipped - already syncing:', Array.from(syncingBillIds.current));
                 }
                 return;
             }
@@ -58,46 +30,69 @@ export function useAutoSync(isAuthenticated: boolean) {
             // 從 store 取得最新的帳單資料
             const currentBills = useSnapSplitStore.getState().bills;
 
-            for (const billId of billIdsToSync) {
-                if (syncingBillIds.current.has(billId)) continue;
+            // 找出需要同步的帳單
+            // 注意：有 remoteId 的帳單應該透過 SignalR 同步操作，這裡只處理：
+            // 1. 首次同步（沒有 remoteId 的本地帳單）
+            // 2. SignalR 無法使用時的備援同步（暫時禁用）
+            // const connectionStatus = useSnapSplitStore.getState().connectionStatus;
+            const billsToSync = currentBills.filter(bill => {
+                if (bill.isSnapshot) return false;
+                if (syncingBillIds.current.has(bill.id)) return false;
 
-                const bill = currentBills.find(b => b.id === billId);
-                if (!bill) continue;
+                // 沒有 remoteId 的帳單（首次同步）
+                if (!bill.remoteId && (bill.syncStatus === 'local' || bill.syncStatus === 'modified' || bill.syncStatus === 'error')) {
+                    if (import.meta.env.DEV) {
+                        console.log('[AutoSync] Will sync (no remoteId):', bill.name);
+                    }
+                    return true;
+                }
 
-                // 再次確認需要同步
-                const needsSync =
-                    (!bill.remoteId && bill.syncStatus === 'local') ||
-                    (bill.remoteId && bill.syncStatus === 'modified');
+                // TODO: 暫時禁用備援同步以調試 SignalR 操作
+                // 有 remoteId 但 SignalR 未連線時，作為備援同步
+                // 注意：這會使用 REST API 完整同步，可能導致版本衝突
+                // if (bill.remoteId && connectionStatus !== 'connected') {
+                //     if (bill.syncStatus === 'modified' || bill.syncStatus === 'error') {
+                //         return true;
+                //     }
+                // }
+                return false;
+            });
 
-                if (!needsSync) continue;
+            if (billsToSync.length === 0) return;
 
-                syncingBillIds.current.add(billId);
+            if (import.meta.env.DEV) {
+                console.log('[AutoSync] Bills to sync:', billsToSync.map(b => b.name));
+            }
+
+            // 同步每個帳單
+            for (const bill of billsToSync) {
+                syncingBillIds.current.add(bill.id);
                 try {
                     if (import.meta.env.DEV) {
-                        console.log('[AutoSync] Syncing bill:', billId, bill.name);
+                        console.log('[AutoSync] Syncing bill:', bill.id, bill.name);
                     }
                     await syncBillRef.current(bill);
                     if (import.meta.env.DEV) {
-                        console.log('[AutoSync] Sync success:', billId);
+                        console.log('[AutoSync] Sync success:', bill.id);
                     }
                 } catch (err) {
-                    console.warn('[AutoSync] Failed to sync bill:', billId, err);
+                    console.warn('[AutoSync] Failed to sync bill:', bill.id, err);
                 } finally {
-                    syncingBillIds.current.delete(billId);
+                    syncingBillIds.current.delete(bill.id);
                 }
             }
-        }, AUTO_SYNC_DEBOUNCE_MS);
-
-        return () => {
-            if (syncTimeoutRef.current) {
-                clearTimeout(syncTimeoutRef.current);
-            }
         };
-    // 使用 ref 避免 syncBill 造成不必要的 re-trigger
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isAuthenticated, billIdsToSync.join(',')]);
+
+        // 立即檢查一次
+        checkAndSync();
+
+        // 設定定期檢查
+        const intervalId = setInterval(checkAndSync, AUTO_SYNC_INTERVAL_MS);
+
+        return () => clearInterval(intervalId);
+    }, [isAuthenticated]);
 
     return {
-        pendingSyncCount: billIdsToSync.length,
+        pendingSyncCount: 0, // 不再追蹤，避免觸發 re-render
     };
 }

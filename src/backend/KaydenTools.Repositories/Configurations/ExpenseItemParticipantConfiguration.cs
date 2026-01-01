@@ -12,6 +12,10 @@ public class ExpenseItemParticipantConfiguration : IEntityTypeConfiguration<Expe
 
         builder.HasKey(eip => new { eip.ExpenseItemId, eip.MemberId });
 
+        // Explicit column mapping to match migration (item_id instead of expense_item_id)
+        builder.Property(eip => eip.ExpenseItemId).HasColumnName("item_id");
+        builder.Property(eip => eip.MemberId).HasColumnName("member_id");
+
         builder.HasOne(eip => eip.ExpenseItem)
             .WithMany(ei => ei.Participants)
             .HasForeignKey(eip => eip.ExpenseItemId)

@@ -13,7 +13,8 @@ public class UnitOfWork : IUnitOfWork
     private IBillRepository? _bills;
     private IMemberRepository? _members;
     private IExpenseRepository? _expenses;
-    private ISettlementRepository? _settlements;
+    private ISettledTransferRepository? _settledTransfers;
+    private IOperationRepository? _operations;
     private IShortUrlRepository? _shortUrls;
     private IUrlClickRepository? _urlClicks;
 
@@ -27,7 +28,8 @@ public class UnitOfWork : IUnitOfWork
     public IBillRepository Bills => _bills ??= new BillRepository(_context);
     public IMemberRepository Members => _members ??= new MemberRepository(_context);
     public IExpenseRepository Expenses => _expenses ??= new ExpenseRepository(_context);
-    public ISettlementRepository Settlements => _settlements ??= new SettlementRepository(_context);
+    public ISettledTransferRepository SettledTransfers => _settledTransfers ??= new SettledTransferRepository(_context);
+    public IOperationRepository Operations => _operations ??= new OperationRepository(_context);
 
     // UrlShortener
     public IShortUrlRepository ShortUrls => _shortUrls ??= new ShortUrlRepository(_context);
@@ -66,6 +68,31 @@ public class UnitOfWork : IUnitOfWork
             await _transaction.DisposeAsync();
             _transaction = null;
         }
+    }
+
+    public async Task<TResult> ExecuteInTransactionAsync<TResult>(Func<Task<TResult>> operation, CancellationToken ct = default)
+    {
+        var strategy = _context.Database.CreateExecutionStrategy();
+
+        return await strategy.ExecuteAsync(
+            state: (operation, ct),
+            operation: async (context, state, cancellationToken) =>
+            {
+                await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+                try
+                {
+                    var result = await state.operation();
+                    await transaction.CommitAsync(cancellationToken);
+                    return result;
+                }
+                catch
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    throw;
+                }
+            },
+            verifySucceeded: null,
+            cancellationToken: ct);
     }
 
     public void Dispose()

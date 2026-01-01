@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build:*)",
+      "Bash(npm install:*)",
+      "Bash(mkdir:*)",
+      "Bash(grep:*)",
+      "Bash(dotnet new:*)",
+      "Bash(dotnet sln:*)",
+      "Bash(dotnet sln add:*)",
+      "Bash(dotnet add:*)",
+      "Bash(dotnet nuget list:*)",
+      "Bash(dotnet remove:*)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet tool install:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(curl:*)",
+      "Bash(npm run gen-api:*)",
+      "Bash(cat:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat\\(backend\\): 實作增量同步與樂觀鎖\n\n- Bill 實體新增 Version 欄位\n- SyncBillDto 改為 Collection 格式 \\(Upsert/DeletedIds\\)\n- BillService 實作樂觀鎖衝突檢測\n- 衝突時回傳 latestBill 供前端合併\n- UnitOfWork 新增 ClearChangeTracker\nEOF\n\\)\")"
+    ]
+  }
+}

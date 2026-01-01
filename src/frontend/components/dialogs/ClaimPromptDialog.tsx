@@ -94,7 +94,7 @@ export function ClaimPromptDialog({
             try {
                 const syncResult = await syncBill(bill);
                 // 從同步結果取得成員的 remoteId
-                memberRemoteId = syncResult.idMappings?.members?.[selectedMember.id];
+                memberRemoteId = syncResult.idMappings?.members?.[selectedMember.id] ?? undefined;
                 if (!memberRemoteId) {
                     throw new Error('成員同步失敗');
                 }

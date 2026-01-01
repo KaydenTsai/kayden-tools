@@ -33,7 +33,8 @@ public class AppDbContext : DbContext
     public DbSet<ExpenseItem> ExpenseItems => Set<ExpenseItem>();
     public DbSet<ExpenseParticipant> ExpenseParticipants => Set<ExpenseParticipant>();
     public DbSet<ExpenseItemParticipant> ExpenseItemParticipants => Set<ExpenseItemParticipant>();
-    public DbSet<Settlement> Settlements => Set<Settlement>();
+    public DbSet<SettledTransfer> SettledTransfers => Set<SettledTransfer>();
+    public DbSet<Operation> Operations => Set<Operation>();
 
     // UrlShortener
     public DbSet<ShortUrl> ShortUrls => Set<ShortUrl>();

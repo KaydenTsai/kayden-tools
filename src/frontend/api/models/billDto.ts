@@ -14,6 +14,8 @@ export interface BillDto {
   name?: string | null;
   /** @nullable */
   shareCode?: string | null;
+  version?: number;
+  isSettled?: boolean;
   createdAt?: string;
   /** @nullable */
   updatedAt?: string | null;

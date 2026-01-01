@@ -28,9 +28,9 @@ public class ExpenseItem : IEntity
     public decimal Amount { get; set; }
 
     /// <summary>
-    /// 付款者 ID
+    /// 付款者 ID（可為空，表示未指定付款者）
     /// </summary>
-    public Guid PaidById { get; set; }
+    public Guid? PaidById { get; set; }
 
     /// <summary>
     /// 所屬費用
@@ -38,9 +38,9 @@ public class ExpenseItem : IEntity
     public Expense Expense { get; set; } = null!;
 
     /// <summary>
-    /// 付款者
+    /// 付款者（可為空）
     /// </summary>
-    public Member PaidBy { get; set; } = null!;
+    public Member? PaidBy { get; set; }
 
     /// <summary>
     /// 分攤者集合

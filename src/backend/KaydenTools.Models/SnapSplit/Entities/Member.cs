@@ -44,6 +44,11 @@ public class Member : IEntity
     public DateTime? ClaimedAt { get; set; }
 
     /// <summary>
+    /// 更新時間
+    /// </summary>
+    public DateTime? UpdatedAt { get; set; }
+
+    /// <summary>
     /// 所屬帳單
     /// </summary>
     public Bill Bill { get; set; } = null!;

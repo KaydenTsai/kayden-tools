@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Bill, Expense, ExpenseItem, SyncStatus } from "@/types/snap-split";
+import type { Bill, SyncStatus } from "@/types/snap-split";
+import { applyOperationToBill } from "@/services/operations/applier";
+import type { Operation } from "@/services/signalr/billConnection";
 
 const generateId = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
@@ -14,87 +16,8 @@ const createDefaultBill = (name: string): Bill => ({
     createdAt: now(),
     updatedAt: now(),
     syncStatus: 'local',
+    version: 0,
 });
-
-const updateCurrentBill = (
-    state: SnapSplitState,
-    updater: (bill: Bill) => Partial<Bill>
-): { bills: Bill[] } => ({
-    bills: state.bills.map(bill => {
-        if (bill.id !== state.currentBillId) return bill;
-        const updates = updater(bill);
-        const newSyncStatus = bill.syncStatus === 'synced' ? 'modified' : bill.syncStatus;
-
-        return { ...bill, ...updates, updatedAt: now(), syncStatus: newSyncStatus };
-    }),
-});
-
-export interface ClaimMemberParams {
-    memberId: string;
-    userId: string;
-    displayName: string;
-    avatarUrl?: string;
-}
-
-export interface SnapSplitState {
-    bills: Bill[];
-    currentBillId: string | null;
-    /** Session-only: 本次瀏覽已跳過認領的帳單 ID（不持久化） */
-    skippedClaimBillIds: string[];
-
-    // Bill actions
-    createBill: (name: string) => void;
-    deleteBill: (id: string) => void;
-    selectBill: (id: string) => void;
-    updateBillName: (name: string) => void;
-    importBill: (bill: Bill) => string;
-    /** 從快照匯入帳單（產生新 ID，標記為快照） */
-    importBillFromSnapshot: (bill: Bill, source?: string) => string;
-    /** 設定帳單擁有者 */
-    setBillOwner: (billId: string, userId: string) => void;
-
-    // Member actions
-    addMember: (name: string) => void;
-    removeMember: (id: string) => void;
-    updateMember: (id: string, name: string) => void;
-    /** 認領成員（綁定 userId） */
-    claimMember: (params: ClaimMemberParams) => void;
-    /** 取消認領成員 */
-    unclaimMember: (memberId: string) => void;
-    /** 檢查成員是否已被認領 */
-    isMemberClaimed: (memberId: string) => boolean;
-    /** 取得當前使用者在此帳單中認領的成員 */
-    getMyClaimedMember: (userId: string) => string | null;
-
-    // Claim prompt actions
-    /** 標記帳單為已跳過認領（本次 session） */
-    skipClaimForBill: (billId: string) => void;
-    /** 檢查是否應該顯示認領提示 */
-    shouldShowClaimPrompt: (billId: string, userId: string | undefined) => boolean;
-
-    // Expense actions
-    addExpense: (expense: Omit<Expense, 'id'>) => void;
-    removeExpense: (expenseId: string) => void;
-    updateExpense: (expenseId: string, updates: Partial<Expense>) => void;
-
-    // Expense Item actions
-    addExpenseItem: (expenseId: string, item: Omit<ExpenseItem, 'id'>) => void;
-    updateExpenseItem: (expenseId: string, itemId: string, updates: Partial<ExpenseItem>) => void;
-    removeExpenseItem: (expenseId: string, itemId: string) => void;
-
-    // Settlement actions
-    toggleSettlement: (fromId: string, toId: string) => void;
-    clearAllSettlements: () => void;
-
-    // Sync actions
-    setBillSyncStatus: (billId: string, status: SyncStatus, error?: string) => void;
-    setBillRemoteId: (billId: string, remoteId: string, shareCode?: string) => void;
-    applyIdMappings: (billId: string, mappings: IdMappings) => void;
-    markBillAsSynced: (billId: string) => void;
-    getUnsyncedBills: () => Bill[];
-    /** 從遠端批次匯入帳單（跳過已存在的，不改變 currentBillId） */
-    importBillsFromRemote: (bills: Bill[]) => number;
-}
 
 export interface IdMappings {
     members: Record<string, string>;
@@ -102,13 +25,66 @@ export interface IdMappings {
     expenseItems: Record<string, string>;
 }
 
+export interface SnapSplitState {
+    bills: Bill[];
+    currentBillId: string | null;
+    connectionStatus: 'disconnected' | 'connecting' | 'connected';
+    skippedClaimBillIds: Set<string>;
+
+    // Core Actions
+    createBill: (name: string) => void;
+    deleteBill: (id: string) => void;
+    selectBill: (id: string | null) => void;
+    updateBillName: (id: string, name: string) => void;
+
+    /**
+     * 套用操作（本地樂觀更新或接收到遠端通知）
+     */
+    applyOperation: (op: Operation) => void;
+
+    /**
+     * 發送操作到後端
+     */
+    dispatch: (opType: string, targetId: string | undefined, payload: any) => Promise<void>;
+
+    // Helpers
+    importBill: (bill: Bill) => string;
+    importBillFromSnapshot: (bill: Bill, source?: string) => string;
+    setConnectionStatus: (status: SnapSplitState['connectionStatus']) => void;
+
+    // Sync Methods (V3)
+    setBillSyncStatus: (billId: string, status: SyncStatus, error?: string) => void;
+    setBillRemoteId: (billId: string, remoteId: string, shareCode?: string, version?: number) => void;
+    applyIdMappings: (billId: string, mappings: IdMappings) => void;
+    markBillAsSynced: (billId: string, sentUpdatedAt?: string) => void;
+    importBillsFromRemote: (bills: Bill[], mode?: 'merge' | 'replace_list') => number;
+    getUnsyncedBills: () => Bill[];
+
+    // Claim Methods
+    claimMember: (params: { memberId: string; userId: string; displayName?: string; avatarUrl?: string }) => void;
+    unclaimMember: (memberId: string) => void;
+    shouldShowClaimPrompt: (billId: string, userId: string | undefined) => boolean;
+    skipClaimForBill: (billId: string) => void;
+
+    // Compatibility Layer (V2 actions redirected to V3 dispatch)
+    addMember: (name: string) => void;
+    removeMember: (id: string) => void;
+    updateMember: (id: string, name: string) => void;
+    addExpense: (expense: any) => void;
+    removeExpense: (id: string) => void;
+    updateExpense: (id: string, updates: any) => void;
+    toggleSettlement: (fromId: string, toId: string) => void;
+}
+
 export const useSnapSplitStore = create<SnapSplitState>()(
     persist(
         (set, get) => ({
             bills: [],
             currentBillId: null,
-            skippedClaimBillIds: [],
+            connectionStatus: 'disconnected',
+            skippedClaimBillIds: new Set<string>(),
 
+            // Core Actions
             createBill: (name) => {
                 const newBill = createDefaultBill(name);
                 set(state => ({
@@ -117,16 +93,69 @@ export const useSnapSplitStore = create<SnapSplitState>()(
                 }));
             },
 
-            deleteBill: (id) => set(state => ({
-                bills: state.bills.filter(bill => bill.id !== id),
-                currentBillId: state.currentBillId === id ? null : state.currentBillId,
-            })),
-
             selectBill: (id) => set({ currentBillId: id }),
 
-            updateBillName: (name) => set(state =>
-                updateCurrentBill(state, () => ({ name }))
-            ),
+            setConnectionStatus: (status) => set({ connectionStatus: status }),
+
+            applyOperation: (op) => {
+                set(state => {
+                    // 支援匹配本地 ID 或 remoteId
+                    const bill = state.bills.find(b => b.id === op.billId || b.remoteId === op.billId);
+                    if (!bill) return state;
+
+                    // 版本檢查：-1 表示樂觀更新，直接套用
+                    if (op.version !== -1 && bill.version >= op.version) return state;
+
+                    const updatedBill = applyOperationToBill(bill, op);
+
+                    // 如果是從伺服器確認的操作（version !== -1），標記為已同步
+                    // 這表示操作已成功儲存到後端
+                    const newSyncStatus = op.version !== -1 ? 'synced' as const : bill.syncStatus;
+
+                    return {
+                        bills: state.bills.map(b =>
+                            (b.id === bill.id) ? { ...updatedBill, syncStatus: newSyncStatus } : b
+                        )
+                    };
+                });
+            },
+
+            dispatch: async (opType, targetId, payload) => {
+                const { currentBillId, bills, applyOperation } = get();
+                const bill = bills.find(b => b.id === currentBillId);
+                if (!bill) return;
+
+                // 建立本地操作
+                const localOp = {
+                    id: generateId(),
+                    billId: bill.id,
+                    version: -1, // -1 表示樂觀更新，尚未確認
+                    opType,
+                    targetId,
+                    payload,
+                    clientId: generateId(),
+                    createdAt: now()
+                };
+
+                // 套用操作到本地狀態
+                applyOperation(localOp as any);
+
+                // 標記為 modified，觸發 useAutoSync
+                set(state => ({
+                    bills: state.bills.map(b =>
+                        b.id === bill.id ? { ...b, syncStatus: 'modified' as SyncStatus, updatedAt: now() } : b
+                    )
+                }));
+            },
+
+            // Redirection logic
+            addMember: (name) => get().dispatch("MEMBER_ADD", generateId(), { name }),
+            removeMember: (id) => get().dispatch("MEMBER_REMOVE", id, {}),
+            updateMember: (id, name) => get().dispatch("MEMBER_UPDATE", id, { name }),
+            addExpense: (exp) => get().dispatch("EXPENSE_ADD", generateId(), exp),
+            removeExpense: (id) => get().dispatch("EXPENSE_DELETE", id, {}),
+            updateExpense: (id, updates) => get().dispatch("EXPENSE_UPDATE", id, updates),
+            toggleSettlement: (fromId, toId) => get().dispatch("SETTLEMENT_TOGGLE", undefined, { fromId, toId }),
 
             importBill: (bill) => {
                 const newId = generateId();
@@ -142,335 +171,188 @@ export const useSnapSplitStore = create<SnapSplitState>()(
                 return newId;
             },
 
+            deleteBill: (id) => {
+                set(state => ({
+                    bills: state.bills.filter(b => b.id !== id),
+                    currentBillId: state.currentBillId === id ? null : state.currentBillId,
+                }));
+            },
+
+            updateBillName: (id, name) => {
+                set(state => ({
+                    bills: state.bills.map(b =>
+                        b.id === id ? { ...b, name, updatedAt: now() } : b
+                    ),
+                }));
+            },
+
             importBillFromSnapshot: (bill, source) => {
                 const newId = generateId();
                 set(state => ({
                     bills: [...state.bills, {
                         ...bill,
                         id: newId,
-                        createdAt: now(),
-                        updatedAt: now(),
-                        syncStatus: 'local',
-                        isSnapshot: true,
-                        snapshotSource: source,
-                        // 清除遠端相關欄位
-                        remoteId: undefined,
-                        shareCode: undefined,
-                        lastSyncedAt: undefined,
-                        ownerId: undefined,
-                        // 清除成員的認領狀態
-                        members: bill.members.map(m => ({
-                            ...m,
-                            userId: undefined,
-                            avatarUrl: undefined,
-                            originalName: undefined,
-                            claimedAt: undefined,
-                            remoteId: undefined,
-                        })),
-                        // 清除費用的遠端 ID
-                        expenses: bill.expenses.map(e => ({
-                            ...e,
-                            remoteId: undefined,
-                            items: e.items.map(item => ({
-                                ...item,
-                                remoteId: undefined,
-                            })),
-                        })),
+                        syncStatus: 'synced' as const,
+                        source: source,
                     }],
                     currentBillId: newId,
                 }));
                 return newId;
             },
 
-            setBillOwner: (billId, userId) => set(state => ({
-                bills: state.bills.map(bill =>
-                    bill.id === billId
-                        ? { ...bill, ownerId: userId, updatedAt: now() }
-                        : bill
-                ),
-            })),
+            // Sync Methods Implementation
+            setBillSyncStatus: (billId, status, error) => {
+                set(state => ({
+                    bills: state.bills.map(b =>
+                        b.id === billId
+                            ? { ...b, syncStatus: status, syncError: error }
+                            : b
+                    ),
+                }));
+            },
 
-            addMember: (name) => set(state =>
-                updateCurrentBill(state, (bill) => ({
-                    members: [...bill.members, { id: generateId(), name }],
-                }))
-            ),
-
-            removeMember: (id) => set(state =>
-                updateCurrentBill(state, (bill) => ({
-                    members: bill.members.filter(m => m.id !== id),
-                    expenses: bill.expenses.map(exp => ({
-                        ...exp,
-                        participants: exp.participants.filter(p => p !== id),
-                        paidBy: exp.paidBy === id ? '' : exp.paidBy,
-                        items: exp.items.map(item => ({
-                            ...item,
-                            participants: item.participants.filter(p => p !== id),
-                            paidBy: item.paidBy === id ? '' : item.paidBy,
-                        })),
-                    })),
-                }))
-            ),
-
-            updateMember: (id, name) => set(state =>
-                updateCurrentBill(state, (bill) => ({
-                    members: bill.members.map(m => m.id === id ? { ...m, name } : m),
-                }))
-            ),
-
-            claimMember: ({ memberId, userId, displayName, avatarUrl }) => set(state =>
-                updateCurrentBill(state, (bill) => ({
-                    members: bill.members.map(m =>
-                        m.id === memberId
+            setBillRemoteId: (billId, remoteId, shareCode, version) => {
+                set(state => ({
+                    bills: state.bills.map(b =>
+                        b.id === billId
                             ? {
+                                  ...b,
+                                  remoteId,
+                                  shareCode: shareCode ?? b.shareCode,
+                                  version: version ?? b.version,
+                              }
+                            : b
+                    ),
+                }));
+            },
+
+            applyIdMappings: (billId, mappings) => {
+                set(state => ({
+                    bills: state.bills.map(b => {
+                        if (b.id !== billId) return b;
+                        return {
+                            ...b,
+                            members: b.members.map(m => ({
                                 ...m,
-                                userId,
-                                avatarUrl,
-                                originalName: m.originalName ?? m.name,
-                                name: displayName,
-                                claimedAt: now(),
-                            }
-                            : m
-                    ),
-                }))
-            ),
-
-            unclaimMember: (memberId) => set(state =>
-                updateCurrentBill(state, (bill) => ({
-                    members: bill.members.map(m =>
-                        m.id === memberId
-                            ? {
-                                ...m,
-                                name: m.originalName ?? m.name,
-                                userId: undefined,
-                                avatarUrl: undefined,
-                                originalName: undefined,
-                                claimedAt: undefined,
-                            }
-                            : m
-                    ),
-                }))
-            ),
-
-            isMemberClaimed: (memberId) => {
-                const state = get();
-                const bill = state.bills.find(b => b.id === state.currentBillId);
-                if (!bill) return false;
-                const member = bill.members.find(m => m.id === memberId);
-                return !!member?.userId;
-            },
-
-            getMyClaimedMember: (userId) => {
-                const state = get();
-                const bill = state.bills.find(b => b.id === state.currentBillId);
-                if (!bill) return null;
-                const member = bill.members.find(m => m.userId === userId);
-                return member?.id ?? null;
-            },
-
-            skipClaimForBill: (billId) => set(state => ({
-                skippedClaimBillIds: [...state.skippedClaimBillIds, billId],
-            })),
-
-            shouldShowClaimPrompt: (billId, userId) => {
-                const state = get();
-                // 必須已登入
-                if (!userId) return false;
-
-                const bill = state.bills.find(b => b.id === billId);
-                if (!bill) return false;
-
-                // 快照帳單不需要認領
-                if (bill.isSnapshot) return false;
-
-                // 本次 session 已跳過
-                if (state.skippedClaimBillIds.includes(billId)) return false;
-
-                // 使用者已在此帳單認領成員
-                const alreadyClaimed = bill.members.some(m => m.userId === userId);
-                if (alreadyClaimed) return false;
-
-                // 還有未認領的成員
-                const hasUnclaimedMembers = bill.members.some(m => !m.userId);
-                if (!hasUnclaimedMembers) return false;
-
-                return true;
-            },
-
-            addExpense: (expense) => set(state =>
-                updateCurrentBill(state, (bill) => ({
-                    expenses: [...bill.expenses, { ...expense, id: generateId() }],
-                }))
-            ),
-
-            removeExpense: (expenseId) => set(state =>
-                updateCurrentBill(state, (bill) => ({
-                    expenses: bill.expenses.filter(e => e.id !== expenseId),
-                }))
-            ),
-
-            updateExpense: (expenseId, updates) => set(state =>
-                updateCurrentBill(state, (bill) => ({
-                    expenses: bill.expenses.map(e =>
-                        e.id === expenseId ? { ...e, ...updates } : e
-                    ),
-                }))
-            ),
-
-            addExpenseItem: (expenseId, item) => set(state =>
-                updateCurrentBill(state, (bill) => ({
-                    expenses: bill.expenses.map(e =>
-                        e.id === expenseId
-                            ? { ...e, items: [...e.items, { ...item, id: generateId() }] }
-                            : e
-                    ),
-                }))
-            ),
-
-            updateExpenseItem: (expenseId, itemId, updates) => set(state =>
-                updateCurrentBill(state, (bill) => ({
-                    expenses: bill.expenses.map(e =>
-                        e.id === expenseId
-                            ? {
-                                ...e,
-                                items: e.items.map(item =>
-                                    item.id === itemId ? { ...item, ...updates } : item
-                                ),
-                            }
-                            : e
-                    ),
-                }))
-            ),
-
-            removeExpenseItem: (expenseId, itemId) => set(state =>
-                updateCurrentBill(state, (bill) => ({
-                    expenses: bill.expenses.map(e =>
-                        e.id === expenseId
-                            ? { ...e, items: e.items.filter(item => item.id !== itemId) }
-                            : e
-                    ),
-                }))
-            ),
-
-            toggleSettlement: (fromId, toId) => set(state =>
-                updateCurrentBill(state, (bill) => {
-                    const key = `${fromId}-${toId}`;
-                    const isSettled = bill.settledTransfers.includes(key);
-                    return {
-                        settledTransfers: isSettled
-                            ? bill.settledTransfers.filter(t => t !== key)
-                            : [...bill.settledTransfers, key],
-                    };
-                })
-            ),
-
-            clearAllSettlements: () => set(state =>
-                updateCurrentBill(state, () => ({ settledTransfers: [] }))
-            ),
-
-            setBillSyncStatus: (billId, status, error) => set(state => ({
-                bills: state.bills.map(bill =>
-                    bill.id === billId
-                        ? { ...bill, syncStatus: status, syncError: error }
-                        : bill
-                ),
-            })),
-
-            setBillRemoteId: (billId, remoteId, shareCode) => set(state => ({
-                bills: state.bills.map(bill =>
-                    bill.id === billId
-                        ? { ...bill, remoteId, shareCode, lastSyncedAt: now() }
-                        : bill
-                ),
-            })),
-
-            applyIdMappings: (billId, mappings) => set(state => ({
-                bills: state.bills.map(bill => {
-                    if (bill.id !== billId) return bill;
-
-                    return {
-                        ...bill,
-                        members: bill.members.map(m => ({
-                            ...m,
-                            remoteId: mappings.members[m.id] ?? m.remoteId,
-                        })),
-                        expenses: bill.expenses.map(e => ({
-                            ...e,
-                            remoteId: mappings.expenses[e.id] ?? e.remoteId,
-                            items: e.items.map(item => ({
-                                ...item,
-                                remoteId: mappings.expenseItems[item.id] ?? item.remoteId,
+                                remoteId: mappings.members[m.id] ?? m.remoteId,
                             })),
-                        })),
-                    };
-                }),
-            })),
-
-            markBillAsSynced: (billId) => set(state => ({
-                bills: state.bills.map(bill =>
-                    bill.id === billId
-                        ? { ...bill, syncStatus: 'synced' as SyncStatus, lastSyncedAt: now(), syncError: undefined }
-                        : bill
-                ),
-            })),
-
-            getUnsyncedBills: () => {
-                return get().bills.filter(
-                    bill => bill.syncStatus === 'local' || bill.syncStatus === 'modified'
-                );
+                            expenses: b.expenses.map(e => ({
+                                ...e,
+                                remoteId: mappings.expenses[e.id] ?? e.remoteId,
+                                items: e.items.map(i => ({
+                                    ...i,
+                                    remoteId: mappings.expenseItems[i.id] ?? i.remoteId,
+                                })),
+                            })),
+                        };
+                    }),
+                }));
             },
 
-            importBillsFromRemote: (remoteBills) => {
-                let addedCount = 0;
-                let updatedCount = 0;
+            markBillAsSynced: (billId, sentUpdatedAt) => {
+                set(state => ({
+                    bills: state.bills.map(b => {
+                        if (b.id !== billId) return b;
+                        // 如果本地已經有更新（updatedAt 比發送時更新），維持 modified 狀態
+                        if (sentUpdatedAt && b.updatedAt > sentUpdatedAt) {
+                            return { ...b, syncStatus: 'modified' as const };
+                        }
+                        return {
+                            ...b,
+                            syncStatus: 'synced' as const,
+                            lastSyncedAt: now(),
+                            syncError: undefined,
+                            // 清除待同步的變更追蹤清單
+                            deletedMemberIds: undefined,
+                            deletedExpenseIds: undefined,
+                            unsettledTransfers: undefined,
+                            expenses: b.expenses.map(e => ({
+                                ...e,
+                                deletedItemIds: undefined
+                            }))
+                        };
+                    }),
+                }));
+            },
 
+            importBillsFromRemote: (remoteBills, mode = 'merge') => {
+                let mergedCount = 0;
                 set(state => {
-                    const currentBills = [...state.bills];
-                    const newBills: Bill[] = [];
-                    let hasChanges = false;
+                    const updatedBills = [...state.bills];
+                    const remoteIds = new Set(remoteBills.map(b => b.remoteId).filter(Boolean));
 
-                    for (const remoteBill of remoteBills) {
-                        const index = currentBills.findIndex(local => local.remoteId === remoteBill.remoteId);
-
-                        if (index === -1 && remoteBill.remoteId) {
-                            // 來自遠端的新帳單
-                            newBills.push({
-                                ...remoteBill,
-                                id: generateId(),
-                                createdAt: remoteBill.createdAt || now(),
-                                updatedAt: remoteBill.updatedAt || now(),
-                            });
-                            addedCount++;
-                            hasChanges = true;
-                        } else if (index !== -1) {
-                            const localBill = currentBills[index];
-                            // 如果本地沒有修改，或者我們想要強制刷新認領狀態，則更新現有帳單
-                            // 目前如果已經是 'synced' 狀態，我們可以安全地用遠端狀態刷新它
-                            if (localBill.syncStatus === 'synced') {
-                                currentBills[index] = {
-                                    ...remoteBill,
-                                    id: localBill.id, // 保留我們內部的本地 ID
-                                    syncStatus: 'synced',
-                                };
-                                updatedCount++;
-                                hasChanges = true;
+                    // replace_list 模式：刪除本地有但遠端沒有的「已同步」帳單
+                    if (mode === 'replace_list') {
+                        for (let i = updatedBills.length - 1; i >= 0; i--) {
+                            const bill = updatedBills[i];
+                            if (bill.syncStatus === 'synced' && bill.remoteId && !remoteIds.has(bill.remoteId)) {
+                                updatedBills.splice(i, 1);
                             }
                         }
                     }
 
-                    if (!hasChanges) return state;
-
-                    return {
-                        bills: [...currentBills, ...newBills],
-                    };
+                    for (const remoteBill of remoteBills) {
+                        const existingIndex = updatedBills.findIndex(
+                            b => b.remoteId === remoteBill.remoteId || b.id === remoteBill.id
+                        );
+                        if (existingIndex >= 0) {
+                            // 更新現有帳單
+                            updatedBills[existingIndex] = {
+                                ...updatedBills[existingIndex],
+                                ...remoteBill,
+                                id: updatedBills[existingIndex].id, // 保持本地 ID
+                            };
+                            mergedCount++;
+                        } else {
+                            // 新增帳單
+                            updatedBills.push(remoteBill);
+                            mergedCount++;
+                        }
+                    }
+                    return { bills: updatedBills };
                 });
+                return mergedCount;
+            },
 
-                return addedCount + updatedCount;
+            getUnsyncedBills: () => {
+                return get().bills.filter(
+                    b => b.syncStatus === 'local' || b.syncStatus === 'modified'
+                );
+            },
+
+            // Claim Methods Implementation
+            claimMember: ({ memberId, userId, displayName, avatarUrl }) => {
+                get().dispatch("MEMBER_CLAIM", memberId, { userId, displayName, avatarUrl });
+            },
+
+            unclaimMember: (memberId) => {
+                get().dispatch("MEMBER_UNCLAIM", memberId, {});
+            },
+
+            shouldShowClaimPrompt: (billId, userId) => {
+                if (!userId) return false;
+                const { bills, skippedClaimBillIds } = get();
+                if (skippedClaimBillIds.has(billId)) return false;
+
+                const bill = bills.find(b => b.id === billId);
+                if (!bill) return false;
+
+                // 檢查是否已經有 member 綁定此 userId
+                const alreadyClaimed = bill.members.some(m => m.userId === userId);
+                if (alreadyClaimed) return false;
+
+                // 只有同步過的帳單才顯示認領提示
+                return bill.syncStatus === 'synced';
+            },
+
+            skipClaimForBill: (billId) => {
+                set(state => ({
+                    skippedClaimBillIds: new Set([...state.skippedClaimBillIds, billId]),
+                }));
             },
         }),
         {
-            name: 'kayden-tools-snap-split',
-            // 排除 session-only 狀態
+            name: 'kayden-tools-snap-split-v3',
             partialize: (state) => ({
                 bills: state.bills,
                 currentBillId: state.currentBillId,

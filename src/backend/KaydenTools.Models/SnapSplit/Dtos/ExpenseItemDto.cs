@@ -7,7 +7,7 @@ public record ExpenseItemDto(
     Guid Id,
     string Name,
     decimal Amount,
-    Guid PaidById,
+    Guid? PaidById,
     List<Guid> ParticipantIds
 );
 
@@ -17,6 +17,6 @@ public record ExpenseItemDto(
 public record CreateExpenseItemDto(
     string Name,
     decimal Amount,
-    Guid PaidById,
+    Guid? PaidById,
     List<Guid> ParticipantIds
 );

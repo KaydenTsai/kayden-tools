@@ -9,7 +9,7 @@ import { useAuthStore } from "@/stores/authStore";
 export interface ExpenseFormState {
     name: string;
     amount: string | number;
-    paidBy: string;
+    paidById: string;
     participants: string[];
 }
 
@@ -114,8 +114,8 @@ export function ExpenseForm({
                                 name={member.name}
                                 color={getMemberColor(member.id, members)}
                                 avatarUrl={member.avatarUrl}
-                                selected={values.paidBy === member.id}
-                                onClick={() => onChange({ paidBy: member.id })}
+                                selected={values.paidById === member.id}
+                                onClick={() => onChange({ paidById: member.id })}
                                 size={40}
                                 isOffline={isMemberOffline(member)}
                             />

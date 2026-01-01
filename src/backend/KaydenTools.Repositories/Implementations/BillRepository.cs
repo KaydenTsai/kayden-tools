@@ -19,7 +19,8 @@ public class BillRepository : Repository<Bill>, IBillRepository
             .Include(b => b.Expenses)
                 .ThenInclude(e => e.Items)
                     .ThenInclude(i => i.Participants)
-            .Include(b => b.Settlements)
+            .Include(b => b.SettledTransfers)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(b => b.Id == id, ct);
     }
 
@@ -32,7 +33,8 @@ public class BillRepository : Repository<Bill>, IBillRepository
             .Include(b => b.Expenses)
                 .ThenInclude(e => e.Items)
                     .ThenInclude(i => i.Participants)
-            .Include(b => b.Settlements)
+            .Include(b => b.SettledTransfers)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(b => b.ShareCode == shareCode, ct);
     }
 
@@ -54,9 +56,43 @@ public class BillRepository : Repository<Bill>, IBillRepository
             .Include(b => b.Expenses)
                 .ThenInclude(e => e.Items)
                     .ThenInclude(i => i.Participants)
-            .Include(b => b.Settlements)
+            .Include(b => b.SettledTransfers)
+            .AsSplitQuery()
             .Where(b => b.Members.Any(m => m.LinkedUserId == userId) || b.OwnerId == userId)
             .OrderByDescending(b => b.UpdatedAt ?? b.CreatedAt)
             .ToListAsync(ct);
+    }
+
+    public async Task<long?> GetCurrentVersionAsync(Guid id, CancellationToken ct = default)
+    {
+        // 使用 AsNoTracking 確保直接從資料庫查詢，不使用快取
+        return await DbSet
+            .AsNoTracking()
+            .Where(b => b.Id == id)
+            .Select(b => (long?)b.Version)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<Bill?> GetByIdWithLockAsync(Guid id, CancellationToken ct = default)
+    {
+        // 使用 raw SQL 執行 SELECT FOR UPDATE 來鎖定該列
+        // 這會在當前事務期間阻止其他事務修改此列
+        // 注意：必須在事務中使用才有效
+        var bill = await Context.Set<Bill>()
+            .FromSqlInterpolated($@"
+                SELECT * FROM snapsplit.bills
+                WHERE id = {id} AND is_deleted = false
+                FOR UPDATE")
+            .Include(b => b.Members.OrderBy(m => m.DisplayOrder))
+            .Include(b => b.Expenses.OrderByDescending(e => e.CreatedAt))
+                .ThenInclude(e => e.Participants)
+            .Include(b => b.Expenses)
+                .ThenInclude(e => e.Items)
+                    .ThenInclude(i => i.Participants)
+            .Include(b => b.SettledTransfers)
+            .AsSplitQuery()
+            .FirstOrDefaultAsync(ct);
+
+        return bill;
     }
 }

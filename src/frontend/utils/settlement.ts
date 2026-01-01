@@ -43,7 +43,7 @@ function processSimpleExpense(
     const sharePerPerson = amountWithFee / participantCount;
 
     // 付款人增加實付金額
-    const payer = summaryMap.get(expense.paidBy);
+    const payer = summaryMap.get(expense.paidById);
     if (payer) {
         payer.totalPaid += amountWithFee;
     }
@@ -77,7 +77,7 @@ function processItemizedExpense(
         const sharePerPerson = itemWithFee / participantCount;
 
         // 付款人增加實付
-        const payer = summaryMap.get(item.paidBy);
+        const payer = summaryMap.get(item.paidById);
         if (payer) {
             payer.totalPaid += itemWithFee;
         }

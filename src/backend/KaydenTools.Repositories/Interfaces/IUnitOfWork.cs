@@ -31,9 +31,14 @@ public interface IUnitOfWork : IDisposable
     IExpenseRepository Expenses { get; }
 
     /// <summary>
-    /// 結算 Repository
+    /// 已結清轉帳 Repository
     /// </summary>
-    ISettlementRepository Settlements { get; }
+    ISettledTransferRepository SettledTransfers { get; }
+
+    /// <summary>
+    /// 操作日誌 Repository
+    /// </summary>
+    IOperationRepository Operations { get; }
 
     /// <summary>
     /// 短網址 Repository
@@ -74,4 +79,13 @@ public interface IUnitOfWork : IDisposable
     /// </summary>
     /// <param name="ct">取消令牌</param>
     Task RollbackTransactionAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// 使用執行策略在交易中執行操作（支援 NpgsqlRetryingExecutionStrategy）
+    /// </summary>
+    /// <typeparam name="TResult">回傳類型</typeparam>
+    /// <param name="operation">要執行的操作</param>
+    /// <param name="ct">取消令牌</param>
+    /// <returns>操作結果</returns>
+    Task<TResult> ExecuteInTransactionAsync<TResult>(Func<Task<TResult>> operation, CancellationToken ct = default);
 }

@@ -1,22 +1,19 @@
 using Kayden.Commons.Common;
 using KaydenTools.Core.Common;
+using KaydenTools.Core.Interfaces;
 using KaydenTools.Models.SnapSplit.Dtos;
 using KaydenTools.Models.SnapSplit.Entities;
 using KaydenTools.Repositories.Interfaces;
 using KaydenTools.Services.Interfaces;
 using Mapster;
+using Microsoft.EntityFrameworkCore;
 
 namespace KaydenTools.Services.SnapSplit;
 
-public class BillService : IBillService
+public class BillService(IUnitOfWork unitOfWork, IBillNotificationService notificationService) : IBillService
 {
-    private static readonly Random Random = new();
-    private readonly IUnitOfWork _unitOfWork;
-
-    public BillService(IUnitOfWork unitOfWork)
-    {
-        _unitOfWork = unitOfWork;
-    }
+    private readonly IUnitOfWork _unitOfWork = unitOfWork;
+    private readonly IBillNotificationService _notificationService = notificationService;
 
     public async Task<Result<BillDto>> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
@@ -51,6 +48,7 @@ public class BillService : IBillService
             b.Members.Count,
             b.Expenses.Count,
             b.Expenses.Sum(e => e.Amount * (1 + e.ServiceFeePercent / 100)),
+            b.IsSettled,
             b.UpdatedAt ?? b.CreatedAt
         )).ToList();
 
@@ -141,84 +139,117 @@ public class BillService : IBillService
         Guid? ownerId,
         CancellationToken ct = default)
     {
-        Bill bill;
-        var memberIdMappings = new Dictionary<string, Guid>();
-        var expenseIdMappings = new Dictionary<string, Guid>();
-        var expenseItemIdMappings = new Dictionary<string, Guid>();
-
-        // 1. 建立或取得帳單並檢查版本
-        if (dto.RemoteId.HasValue)
+        try
         {
-            var existing = await _unitOfWork.Bills.GetByIdWithDetailsAsync(dto.RemoteId.Value, ct);
-            if (existing == null)
+            return await _unitOfWork.ExecuteInTransactionAsync(async () =>
             {
-                return Result.Failure<SyncBillResponseDto>(ErrorCodes.BillNotFound, "Bill not found.");
+            Bill bill;
+            var memberIdMappings = new Dictionary<string, Guid>();
+            var expenseIdMappings = new Dictionary<string, Guid>();
+            var expenseItemIdMappings = new Dictionary<string, Guid>();
+
+            if (dto.RemoteId.HasValue)
+            {
+                // 更新現有帳單
+                var existingBill = await _unitOfWork.Bills.GetByIdWithDetailsAsync(dto.RemoteId.Value, ct);
+                if (existingBill == null)
+                {
+                    return Result.Failure<SyncBillResponseDto>(ErrorCodes.BillNotFound, "Bill not found.");
+                }
+
+                bill = existingBill;
+
+                // 樂觀鎖檢查
+                if (dto.BaseVersion != bill.Version)
+                {
+                    // 回傳衝突並附帶最新帳單資料
+                    return new SyncBillResponseDto(
+                        bill.Id,
+                        bill.Version,
+                        bill.ShareCode,
+                        new SyncIdMappingsDto(
+                            new Dictionary<string, Guid>(),
+                            new Dictionary<string, Guid>(),
+                            new Dictionary<string, Guid>()
+                        ),
+                        DateTime.UtcNow,
+                        MapToBillDto(bill)
+                    );
+                }
+            }
+            else
+            {
+                // 首次同步：建立新帳單
+                bill = new Bill
+                {
+                    Id = Guid.NewGuid(),
+                    Name = dto.Name ?? "Untitled",
+                    OwnerId = ownerId,
+                    ShareCode = GenerateShortCode()
+                };
+                await _unitOfWork.Bills.AddAsync(bill, ct);
             }
 
-            // 樂觀鎖檢查：如果前端基底版本不等於資料庫版本，則發生衝突
-            if (dto.BaseVersion != existing.Version)
-            {
-                return Result.Success(new SyncBillResponseDto(
-                    existing.Id,
-                    existing.Version,
-                    existing.ShareCode,
-                    new SyncIdMappingsDto(new(), new(), new()),
-                    DateTime.UtcNow,
-                    MapToBillDto(existing) // 回傳最新資料供前端合併
-                ));
-            }
-
-            bill = existing;
+            // 更新帳單名稱（如果有提供）
             if (!string.IsNullOrEmpty(dto.Name))
             {
                 bill.Name = dto.Name;
             }
 
-            // 核心補強：先載入資料庫中現有的所有成員到 Mapping 表中
-            // 這樣即便前端這次沒傳送該成員的更新，費用的關聯 (PaidBy, Participants) 也能找得到人
-            foreach (var m in bill.Members)
-            {
-                // 我們需要知道這個成員對應前端的 LocalId
-                // 但後端其實不知道 LocalId。這是一個問題。
-                // 方案：前端在同步費用時，傳送的 PaidByLocalId 若已經是 GUID 格式，
-                // 代表它已經是 RemoteId。
-            }
-        }
-        else
-        {
-            // 首次上傳
-            bill = new Bill
-            {
-                Id = Guid.NewGuid(),
-                Name = dto.Name ?? "New Bill",
-                OwnerId = ownerId,
-                ShareCode = GenerateShortCode(),
-                Version = 1
-            };
-            await _unitOfWork.Bills.AddAsync(bill, ct);
-        }
+            // 建立現有成員的 RemoteId 映射
+            var existingMembersByRemoteId = bill.Members.ToDictionary(m => m.Id);
 
-        // 2. 同步成員 (Upsert)
-        // 為了讓後面的費用能找到關聯，我們先跑一遍成員同步，建立完整的 LocalId -> RemoteId 映射
-        foreach (var memberDto in dto.Members.Upsert ?? Enumerable.Empty<SyncMemberDto>())
-        {
-            Member member;
-            if (memberDto.RemoteId.HasValue)
+            // 建立 LocalId -> RemoteId 映射表（從 Upsert 中）
+            var memberLocalToRemoteMap = dto.Members.Upsert
+                .Where(m => m.RemoteId.HasValue)
+                .ToDictionary(m => m.LocalId, m => m.RemoteId!.Value);
+
+            // 處理成員刪除
+            foreach (var deletedId in dto.Members.DeletedIds)
             {
-                member = bill.Members.FirstOrDefault(m => m.Id == memberDto.RemoteId.Value);
-                if (member != null)
+                Guid? remoteIdToDelete = null;
+
+                // 策略 1: 嘗試將 deletedId 解析為 Guid (直接傳入 RemoteId)
+                if (Guid.TryParse(deletedId, out var parsedGuid))
                 {
+                    remoteIdToDelete = parsedGuid;
+                }
+                // 策略 2: 從 LocalId -> RemoteId 映射中查找
+                else if (memberLocalToRemoteMap.TryGetValue(deletedId, out var mappedRemoteId))
+                {
+                    remoteIdToDelete = mappedRemoteId;
+                }
+
+                // 執行刪除
+                if (remoteIdToDelete.HasValue &&
+                    existingMembersByRemoteId.TryGetValue(remoteIdToDelete.Value, out var memberToRemove))
+                {
+                    bill.Members.Remove(memberToRemove);
+                }
+            }
+
+            // 處理成員 Upsert
+            foreach (var memberDto in dto.Members.Upsert)
+            {
+                if (dto.Members.DeletedIds.Contains(memberDto.LocalId))
+                    continue; // 跳過已刪除的
+
+                Member member;
+                if (memberDto.RemoteId.HasValue && existingMembersByRemoteId.TryGetValue(memberDto.RemoteId.Value, out member!))
+                {
+                    // 更新現有成員
                     member.Name = memberDto.Name;
                     member.DisplayOrder = memberDto.DisplayOrder;
                     member.LinkedUserId = memberDto.LinkedUserId;
                     member.ClaimedAt = memberDto.ClaimedAt;
+                    member.UpdatedAt = DateTime.UtcNow;
                 }
                 else
                 {
-                    // 若有 RemoteId 但找不到，視為重建
+                    // 新增成員
                     member = new Member
                     {
-                        Id = memberDto.RemoteId.Value,
+                        Id = Guid.NewGuid(),
                         BillId = bill.Id,
                         Name = memberDto.Name,
                         DisplayOrder = memberDto.DisplayOrder,
@@ -227,329 +258,789 @@ public class BillService : IBillService
                     };
                     bill.Members.Add(member);
                 }
-            }
-            else
-            {
-                member = new Member
-                {
-                    Id = Guid.NewGuid(),
-                    BillId = bill.Id,
-                    Name = memberDto.Name,
-                    DisplayOrder = memberDto.DisplayOrder,
-                    LinkedUserId = memberDto.LinkedUserId,
-                    ClaimedAt = memberDto.ClaimedAt
-                };
-                bill.Members.Add(member);
+                memberIdMappings[memberDto.LocalId] = member.Id;
             }
 
-            memberIdMappings[memberDto.LocalId] = member.Id;
-        }
+            // 建立現有費用的 RemoteId 映射
+            var existingExpensesByRemoteId = bill.Expenses.ToDictionary(e => e.Id);
 
-        // 注意：除了 upsert 的成員，資料庫裡原本就有但沒被改動的成員，也應該放進 Mapping
-        // 關鍵：前端在建構請求時，必須把「所有成員」都放在 upsert 裡面，
-        // 這樣我們才能建立 LocalId 到 RemoteId 的完整映射。
-        // 目前前端的 billAdapter.ts 確實是送出所有成員，所以這裡沒問題。
+            // 建立 LocalId -> RemoteId 映射表（從 Upsert 中）
+            var expenseLocalToRemoteMap = dto.Expenses.Upsert
+                .Where(e => e.RemoteId.HasValue)
+                .ToDictionary(e => e.LocalId, e => e.RemoteId!.Value);
 
-        // 3. 處理成員刪除 (Explicit Delete)
-        foreach (var deletedIdStr in dto.Members.DeletedIds ?? Enumerable.Empty<string>())
-        {
-            if (Guid.TryParse(deletedIdStr, out var deletedId))
+            // 處理費用刪除
+            foreach (var deletedId in dto.Expenses.DeletedIds)
             {
-                var member = bill.Members.FirstOrDefault(m => m.Id == deletedId);
-                if (member != null)
+                Guid? remoteIdToDelete = null;
+
+                // 策略 1: 嘗試將 deletedId 解析為 Guid (直接傳入 RemoteId)
+                if (Guid.TryParse(deletedId, out var parsedGuid))
                 {
-                    bill.Members.Remove(member);
+                    remoteIdToDelete = parsedGuid;
+                }
+                // 策略 2: 從 LocalId -> RemoteId 映射中查找
+                else if (expenseLocalToRemoteMap.TryGetValue(deletedId, out var mappedRemoteId))
+                {
+                    remoteIdToDelete = mappedRemoteId;
+                }
+
+                // 執行刪除
+                if (remoteIdToDelete.HasValue &&
+                    existingExpensesByRemoteId.TryGetValue(remoteIdToDelete.Value, out var expenseToRemove))
+                {
+                    bill.Expenses.Remove(expenseToRemove);
                 }
             }
-        }
 
-        // 4. 同步費用 (Upsert)
-        foreach (var expenseDto in dto.Expenses.Upsert ?? Enumerable.Empty<SyncExpenseDto>())
-        {
-            Expense expense;
-            if (expenseDto.RemoteId.HasValue)
+            // 處理費用 Upsert
+            foreach (var expenseDto in dto.Expenses.Upsert)
             {
-                expense = bill.Expenses.FirstOrDefault(e => e.Id == expenseDto.RemoteId.Value);
-                if (expense != null)
+                if (dto.Expenses.DeletedIds.Contains(expenseDto.LocalId))
+                    continue;
+
+                Expense expense;
+                if (expenseDto.RemoteId.HasValue && existingExpensesByRemoteId.TryGetValue(expenseDto.RemoteId.Value, out expense!))
                 {
-                    UpdateExpenseFromDto(expense, expenseDto, memberIdMappings);
+                    // 更新現有費用
+                    expense.Name = expenseDto.Name;
+                    expense.Amount = expenseDto.Amount;
+                    expense.ServiceFeePercent = expenseDto.ServiceFeePercent;
+                    expense.IsItemized = expenseDto.IsItemized;
+                    expense.UpdatedAt = DateTime.UtcNow;
                 }
                 else
                 {
-                    expense = CreateExpenseFromDto(bill.Id, expenseDto, memberIdMappings);
+                    // 新增費用
+                    expense = new Expense
+                    {
+                        Id = Guid.NewGuid(),
+                        BillId = bill.Id,
+                        Name = expenseDto.Name,
+                        Amount = expenseDto.Amount,
+                        ServiceFeePercent = expenseDto.ServiceFeePercent,
+                        IsItemized = expenseDto.IsItemized
+                    };
                     bill.Expenses.Add(expense);
                 }
-            }
-            else
-            {
-                expense = CreateExpenseFromDto(bill.Id, expenseDto, memberIdMappings);
-                bill.Expenses.Add(expense);
-            }
 
-            expenseIdMappings[expenseDto.LocalId] = expense.Id;
-
-            // 同步費用細項
-            if (expenseDto.Items != null)
-            {
-                SyncExpenseItemsIncremental(expense, expenseDto.Items, memberIdMappings, expenseItemIdMappings);
-            }
-        }
-
-        // 5. 處理費用刪除 (Explicit Delete)
-        foreach (var deletedIdStr in dto.Expenses.DeletedIds ?? Enumerable.Empty<string>())
-        {
-            if (Guid.TryParse(deletedIdStr, out var deletedId))
-            {
-                var expense = bill.Expenses.FirstOrDefault(e => e.Id == deletedId);
-                if (expense != null)
+                // 處理付款者
+                if (!string.IsNullOrEmpty(expenseDto.PaidByLocalId) && memberIdMappings.TryGetValue(expenseDto.PaidByLocalId, out var paidById))
                 {
-                    bill.Expenses.Remove(expense);
+                    expense.PaidById = paidById;
+                }
+
+                // 處理參與者
+                expense.Participants.Clear();
+                foreach (var participantLocalId in expenseDto.ParticipantLocalIds)
+                {
+                    if (memberIdMappings.TryGetValue(participantLocalId, out var participantId))
+                    {
+                        expense.Participants.Add(new ExpenseParticipant
+                        {
+                            ExpenseId = expense.Id,
+                            MemberId = participantId
+                        });
+                    }
+                }
+
+                // 處理費用細項
+                if (expenseDto.IsItemized && expenseDto.Items != null)
+                {
+                    var existingItemsByRemoteId = expense.Items.ToDictionary(i => i.Id);
+
+                    // 建立 LocalId -> RemoteId 映射表（從 Upsert 中）
+                    var itemLocalToRemoteMap = expenseDto.Items.Upsert
+                        .Where(i => i.RemoteId.HasValue)
+                        .ToDictionary(i => i.LocalId, i => i.RemoteId!.Value);
+
+                    // 處理細項刪除
+                    foreach (var deletedId in expenseDto.Items.DeletedIds)
+                    {
+                        Guid? remoteIdToDelete = null;
+
+                        // 策略 1: 嘗試將 deletedId 解析為 Guid (直接傳入 RemoteId)
+                        if (Guid.TryParse(deletedId, out var parsedGuid))
+                        {
+                            remoteIdToDelete = parsedGuid;
+                        }
+                        // 策略 2: 從 LocalId -> RemoteId 映射中查找
+                        else if (itemLocalToRemoteMap.TryGetValue(deletedId, out var mappedRemoteId))
+                        {
+                            remoteIdToDelete = mappedRemoteId;
+                        }
+
+                        // 執行刪除
+                        if (remoteIdToDelete.HasValue &&
+                            existingItemsByRemoteId.TryGetValue(remoteIdToDelete.Value, out var itemToRemove))
+                        {
+                            expense.Items.Remove(itemToRemove);
+                        }
+                    }
+
+                    // 處理細項 Upsert
+                    foreach (var itemDto in expenseDto.Items.Upsert)
+                    {
+                        if (expenseDto.Items.DeletedIds.Contains(itemDto.LocalId))
+                            continue;
+
+                        ExpenseItem item;
+                        if (itemDto.RemoteId.HasValue && existingItemsByRemoteId.TryGetValue(itemDto.RemoteId.Value, out item!))
+                        {
+                            // 更新現有細項
+                            item.Name = itemDto.Name;
+                            item.Amount = itemDto.Amount;
+                        }
+                        else
+                        {
+                            // 新增細項
+                            item = new ExpenseItem
+                            {
+                                Id = Guid.NewGuid(),
+                                ExpenseId = expense.Id,
+                                Name = itemDto.Name,
+                                Amount = itemDto.Amount
+                            };
+                            expense.Items.Add(item);
+                        }
+
+                        // 處理付款者
+                        if (!string.IsNullOrEmpty(itemDto.PaidByLocalId) && memberIdMappings.TryGetValue(itemDto.PaidByLocalId, out var itemPaidById))
+                        {
+                            item.PaidById = itemPaidById;
+                        }
+
+                        // 處理參與者
+                        item.Participants.Clear();
+                        foreach (var participantLocalId in itemDto.ParticipantLocalIds)
+                        {
+                            if (memberIdMappings.TryGetValue(participantLocalId, out var participantId))
+                            {
+                                item.Participants.Add(new ExpenseItemParticipant
+                                {
+                                    ExpenseItemId = item.Id,
+                                    MemberId = participantId
+                                });
+                            }
+                        }
+
+                        expenseItemIdMappings[itemDto.LocalId] = item.Id;
+                    }
+                }
+
+                expenseIdMappings[expenseDto.LocalId] = expense.Id;
+            }
+
+            // 處理已結清轉帳
+            // 格式支援：
+            // - 舊格式：fromLocalId-toLocalId（金額預設為 0）
+            // - 新格式：fromLocalId-toLocalId:amount（包含結清金額快照）
+            if (dto.SettledTransfers != null)
+            {
+                bill.SettledTransfers.Clear();
+                foreach (var transfer in dto.SettledTransfers)
+                {
+                    // 解析金額（如有）
+                    var mainPart = transfer;
+                    decimal amount = 0;
+
+                    var amountSeparatorIndex = transfer.LastIndexOf(':');
+                    if (amountSeparatorIndex > 0 && amountSeparatorIndex < transfer.Length - 1)
+                    {
+                        var amountStr = transfer.Substring(amountSeparatorIndex + 1);
+                        if (decimal.TryParse(amountStr, out var parsedAmount))
+                        {
+                            amount = parsedAmount;
+                            mainPart = transfer.Substring(0, amountSeparatorIndex);
+                        }
+                    }
+
+                    // 解析 fromId 和 toId
+                    var dashIndex = mainPart.IndexOf('-');
+                    if (dashIndex > 0 && dashIndex < mainPart.Length - 1)
+                    {
+                        var fromPart = mainPart.Substring(0, dashIndex);
+                        var toPart = mainPart.Substring(dashIndex + 1);
+
+                        // 嘗試從映射表獲取 RemoteId，或直接解析為 Guid
+                        Guid? fromId = memberIdMappings.TryGetValue(fromPart, out var mappedFromId)
+                            ? mappedFromId
+                            : (Guid.TryParse(fromPart, out var parsedFromId) ? parsedFromId : null);
+
+                        Guid? toId = memberIdMappings.TryGetValue(toPart, out var mappedToId)
+                            ? mappedToId
+                            : (Guid.TryParse(toPart, out var parsedToId) ? parsedToId : null);
+
+                        if (fromId.HasValue && toId.HasValue)
+                        {
+                            bill.SettledTransfers.Add(new SettledTransfer
+                            {
+                                BillId = bill.Id,
+                                FromMemberId = fromId.Value,
+                                ToMemberId = toId.Value,
+                                Amount = amount,
+                                SettledAt = DateTime.UtcNow
+                            });
+                        }
+                    }
                 }
             }
+
+            // 更新版本號
+            bill.Version++;
+            bill.UpdatedAt = DateTime.UtcNow;
+
+            // 不需要呼叫 Update()：
+            // - 新增的實體已被 AddAsync 追蹤為 Added
+            // - 從資料庫載入的實體會被自動追蹤變更
+            await _unitOfWork.SaveChangesAsync(ct);
+
+            return new SyncBillResponseDto(
+                bill.Id,
+                bill.Version,
+                bill.ShareCode,
+                new SyncIdMappingsDto(memberIdMappings, expenseIdMappings, expenseItemIdMappings),
+                DateTime.UtcNow
+            );
+            }, ct);
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            // 資料庫層級的並發衝突：另一個事務在我們讀取和寫入之間修改了 Bill
+            // 清除追蹤狀態以避免後續操作受影響
+            _unitOfWork.ClearChangeTracker();
 
-        // 更新帳單版本號與時間
-        bill.Version++;
-        bill.UpdatedAt = DateTime.UtcNow;
+            // 重新讀取最新帳單並回傳給前端進行 Rebase
+            if (dto.RemoteId.HasValue)
+            {
+                var latestBill = await _unitOfWork.Bills.GetByIdWithDetailsAsync(dto.RemoteId.Value, ct);
+                if (latestBill != null)
+                {
+                    return new SyncBillResponseDto(
+                        latestBill.Id,
+                        latestBill.Version,
+                        latestBill.ShareCode,
+                        new SyncIdMappingsDto(
+                            new Dictionary<string, Guid>(),
+                            new Dictionary<string, Guid>(),
+                            new Dictionary<string, Guid>()
+                        ),
+                        DateTime.UtcNow,
+                        MapToBillDto(latestBill)
+                    );
+                }
+            }
 
+            return Result.Failure<SyncBillResponseDto>(
+                ErrorCodes.Conflict,
+                "Concurrent modification detected. Please retry with updated version.");
+        }
+    }
+
+    /// <summary>
+    /// Delta 同步帳單資料（v3.2 新機制）
+    /// </summary>
+    public async Task<Result<DeltaSyncResponse>> DeltaSyncAsync(
+        Guid billId,
+        DeltaSyncRequest request,
+        Guid? userId,
+        CancellationToken ct = default)
+    {
         try
         {
-            await _unitOfWork.SaveChangesAsync(ct);
-        }
-        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
-        {
-            // 並發衝突（例如同一時間有另一個請求修改了資料）
-            // 重新讀取最新資料並回傳，讓前端重試
-            _unitOfWork.ClearChangeTracker(); // 清除追蹤，避免污染
-            var latest = await _unitOfWork.Bills.GetByIdWithDetailsAsync(bill.Id, ct);
-            if (latest == null)
+            return await _unitOfWork.ExecuteInTransactionAsync(async () =>
             {
-                return Result.Failure<SyncBillResponseDto>(ErrorCodes.BillNotFound, "Bill deleted during sync.");
-            }
-
-            return Result.Success(new SyncBillResponseDto(
-                latest.Id,
-                latest.Version,
-                latest.ShareCode,
-                new SyncIdMappingsDto(new(), new(), new()),
-                DateTime.UtcNow,
-                MapToBillDto(latest)
-            ));
-        }
-
-        return new SyncBillResponseDto(
-            bill.Id,
-            bill.Version,
-            bill.ShareCode,
-            new SyncIdMappingsDto(memberIdMappings, expenseIdMappings, expenseItemIdMappings),
-            DateTime.UtcNow
-        );
-    }
-
-        private static void SyncExpenseItemsIncremental(
-
-            Expense expense,
-
-            SyncExpenseItemCollectionDto collection,
-
-            Dictionary<string, Guid> memberIdMappings,
-
-            Dictionary<string, Guid> expenseItemIdMappings)
-
-        {
-
-            // Upsert items
-
-            foreach (var itemDto in collection.Upsert ?? Enumerable.Empty<SyncExpenseItemDto>())
-
-            {
-
-                ExpenseItem item;
-
-                if (itemDto.RemoteId.HasValue)
-
+                var bill = await _unitOfWork.Bills.GetByIdWithDetailsAsync(billId, ct);
+                if (bill == null)
                 {
-
-                    item = expense.Items.FirstOrDefault(i => i.Id == itemDto.RemoteId.Value);
-
-                    if (item != null)
-
-                    {
-
-                        UpdateExpenseItemFromDto(item, itemDto, memberIdMappings);
-
-                    }
-
-                    else
-
-                    {
-
-                        item = CreateExpenseItemFromDto(expense.Id, itemDto, memberIdMappings);
-
-                        expense.Items.Add(item);
-
-                    }
-
+                    return Result.Failure<DeltaSyncResponse>(ErrorCodes.BillNotFound, "Bill not found.");
                 }
 
-                else
+                var conflicts = new List<ConflictInfo>();
+                var memberIdMappings = new Dictionary<string, Guid>();
+                var expenseIdMappings = new Dictionary<string, Guid>();
+                var expenseItemIdMappings = new Dictionary<string, Guid>();
 
+                // 1. 版本檢查
+                bool needsCarefulMerge = request.BaseVersion < bill.Version;
+
+                // 2. 處理成員變更
+                if (request.Members != null)
                 {
-
-                    item = CreateExpenseItemFromDto(expense.Id, itemDto, memberIdMappings);
-
-                    expense.Items.Add(item);
-
-                }
-
-                expenseItemIdMappings[itemDto.LocalId] = item.Id;
-
-            }
-
-    
-
-            // Delete items
-
-            foreach (var deletedIdStr in collection.DeletedIds ?? Enumerable.Empty<string>())
-
-            {
-
-                if (Guid.TryParse(deletedIdStr, out var deletedId))
-
-                {
-
-                    var item = expense.Items.FirstOrDefault(i => i.Id == deletedId);
-
-                    if (item != null)
-
+                    // 2.1 處理新增成員 (幾乎不會衝突)
+                    if (request.Members.Add != null)
                     {
-
-                        expense.Items.Remove(item);
-
+                        foreach (var addDto in request.Members.Add)
+                        {
+                            var member = new Member
+                            {
+                                Id = Guid.NewGuid(),
+                                BillId = bill.Id,
+                                Name = addDto.Name,
+                                DisplayOrder = addDto.DisplayOrder ?? (bill.Members.Count > 0 ? bill.Members.Max(m => m.DisplayOrder) + 1 : 0)
+                            };
+                            bill.Members.Add(member);
+                            memberIdMappings[addDto.LocalId] = member.Id;
+                        }
                     }
 
+                    // 2.2 處理更新成員
+                    if (request.Members.Update != null)
+                    {
+                        foreach (var updateDto in request.Members.Update)
+                        {
+                            var member = bill.Members.FirstOrDefault(m => m.Id == updateDto.RemoteId);
+                            if (member == null)
+                            {
+                                conflicts.Add(new ConflictInfo
+                                {
+                                    Type = "member",
+                                    EntityId = updateDto.RemoteId.ToString(),
+                                    Resolution = "server_wins",
+                                    ServerValue = "deleted",
+                                    LocalValue = "update"
+                                });
+                                continue;
+                            }
+
+                            if (needsCarefulMerge)
+                            {
+                                // 檢查每個欄位是否衝突 (此處簡化處理：若欄位非 null 則嘗試更新，若伺服器已有變動則回報)
+                                // 實際實作中，我們需要知道每個欄位在伺服器端上次更新的時間，或是記錄歷史版本。
+                                // 這裡先採用規格書建議：伺服器優先。
+                                if (updateDto.Name != null && member.Name != updateDto.Name)
+                                {
+                                    conflicts.Add(new ConflictInfo
+                                    {
+                                        Type = "member",
+                                        EntityId = member.Id.ToString(),
+                                        Field = "name",
+                                        LocalValue = updateDto.Name,
+                                        ServerValue = member.Name,
+                                        Resolution = "server_wins"
+                                    });
+                                }
+                                else if (updateDto.DisplayOrder.HasValue)
+                                {
+                                    member.DisplayOrder = updateDto.DisplayOrder.Value;
+                                }
+                                
+                                // LinkedUserId 和 ClaimedAt 通常由認領邏輯處理，此處僅在無衝突時套用
+                                if (updateDto.LinkedUserId.HasValue) member.LinkedUserId = updateDto.LinkedUserId;
+                                if (updateDto.ClaimedAt.HasValue) member.ClaimedAt = updateDto.ClaimedAt;
+                            }
+                            else
+                            {
+                                if (updateDto.Name != null) member.Name = updateDto.Name;
+                                if (updateDto.DisplayOrder.HasValue) member.DisplayOrder = updateDto.DisplayOrder.Value;
+                                if (updateDto.LinkedUserId.HasValue) member.LinkedUserId = updateDto.LinkedUserId;
+                                if (updateDto.ClaimedAt.HasValue) member.ClaimedAt = updateDto.ClaimedAt;
+                                member.UpdatedAt = DateTime.UtcNow;
+                            }
+                        }
+                    }
+
+                    // 2.3 處理刪除成員
+                    if (request.Members.Delete != null)
+                    {
+                        foreach (var remoteId in request.Members.Delete)
+                        {
+                            var member = bill.Members.FirstOrDefault(m => m.Id == remoteId);
+                            if (member == null) continue; // 已刪除，忽略
+
+                            if (needsCarefulMerge)
+                            {
+                                conflicts.Add(new ConflictInfo
+                                {
+                                    Type = "member",
+                                    EntityId = remoteId.ToString(),
+                                    Resolution = "manual_required",
+                                    LocalValue = "delete",
+                                    ServerValue = "modified_by_others"
+                                });
+                            }
+                            else
+                            {
+                                bill.Members.Remove(member);
+                            }
+                        }
+                    }
                 }
 
-            }
-
-        }
-
-    private static Expense CreateExpenseFromDto(
-        Guid billId,
-        SyncExpenseDto dto,
-        Dictionary<string, Guid> memberIdMappings)
-    {
-        var expense = new Expense
-        {
-            Id = Guid.NewGuid(),
-            BillId = billId,
-            Name = dto.Name,
-            Amount = dto.Amount,
-            ServiceFeePercent = dto.ServiceFeePercent,
-            IsItemized = dto.IsItemized,
-            PaidById = dto.PaidByLocalId != null && memberIdMappings.TryGetValue(dto.PaidByLocalId, out var paidById)
-                ? paidById
-                : null
-        };
-
-        // 加入參與者
-        foreach (var localId in dto.ParticipantLocalIds)
-        {
-            if (memberIdMappings.TryGetValue(localId, out var memberId))
-            {
-                expense.Participants.Add(new ExpenseParticipant
+                // 3. 處理費用變更
+                if (request.Expenses != null)
                 {
-                    ExpenseId = expense.Id,
-                    MemberId = memberId
-                });
-            }
-        }
+                    // 3.1 處理新增費用
+                    if (request.Expenses.Add != null)
+                    {
+                        foreach (var addDto in request.Expenses.Add)
+                        {
+                            var expense = new Expense
+                            {
+                                Id = Guid.NewGuid(),
+                                BillId = bill.Id,
+                                Name = addDto.Name,
+                                Amount = addDto.Amount,
+                                ServiceFeePercent = addDto.ServiceFeePercent ?? 0,
+                                IsItemized = addDto.IsItemized ?? false
+                            };
 
-        return expense;
-    }
+                            // 付款者處理
+                            if (!string.IsNullOrEmpty(addDto.PaidByMemberId))
+                            {
+                                if (memberIdMappings.TryGetValue(addDto.PaidByMemberId, out var mappedId))
+                                    expense.PaidById = mappedId;
+                                else if (Guid.TryParse(addDto.PaidByMemberId, out var remoteId))
+                                    expense.PaidById = remoteId;
+                            }
 
-    private static void UpdateExpenseFromDto(
-        Expense expense,
-        SyncExpenseDto dto,
-        Dictionary<string, Guid> memberIdMappings)
-    {
-        expense.Name = dto.Name;
-        expense.Amount = dto.Amount;
-        expense.ServiceFeePercent = dto.ServiceFeePercent;
-        expense.IsItemized = dto.IsItemized;
-        expense.PaidById = dto.PaidByLocalId != null &&
-                           memberIdMappings.TryGetValue(dto.PaidByLocalId, out var paidById)
-            ? paidById
-            : null;
+                            // 參與者處理
+                            if (addDto.ParticipantIds != null)
+                            {
+                                foreach (var pid in addDto.ParticipantIds)
+                                {
+                                    Guid? memberId = null;
+                                    if (memberIdMappings.TryGetValue(pid, out var mappedId))
+                                        memberId = mappedId;
+                                    else if (Guid.TryParse(pid, out var remoteId))
+                                        memberId = remoteId;
 
-        // 更新參與者
-        expense.Participants.Clear();
-        foreach (var localId in dto.ParticipantLocalIds)
-        {
-            if (memberIdMappings.TryGetValue(localId, out var memberId))
-            {
-                expense.Participants.Add(new ExpenseParticipant
+                                    if (memberId.HasValue)
+                                    {
+                                        expense.Participants.Add(new ExpenseParticipant
+                                        {
+                                            ExpenseId = expense.Id,
+                                            MemberId = memberId.Value
+                                        });
+                                    }
+                                }
+                            }
+
+                            bill.Expenses.Add(expense);
+                            expenseIdMappings[addDto.LocalId] = expense.Id;
+                        }
+                    }
+
+                    // 3.2 處理更新費用
+                    if (request.Expenses.Update != null)
+                    {
+                        foreach (var updateDto in request.Expenses.Update)
+                        {
+                            var expense = bill.Expenses.FirstOrDefault(e => e.Id == updateDto.RemoteId);
+                            if (expense == null)
+                            {
+                                conflicts.Add(new ConflictInfo
+                                {
+                                    Type = "expense",
+                                    EntityId = updateDto.RemoteId.ToString(),
+                                    Resolution = "server_wins",
+                                    ServerValue = "deleted"
+                                });
+                                continue;
+                            }
+
+                            if (needsCarefulMerge)
+                            {
+                                // 簡化衝突檢測：如果本地嘗試修改且伺服器版本不同，標記衝突
+                                conflicts.Add(new ConflictInfo
+                                {
+                                    Type = "expense",
+                                    EntityId = expense.Id.ToString(),
+                                    Resolution = "server_wins",
+                                    ServerValue = "modified_by_others"
+                                });
+                            }
+                            else
+                            {
+                                if (updateDto.Name != null) expense.Name = updateDto.Name;
+                                if (updateDto.Amount.HasValue) expense.Amount = updateDto.Amount.Value;
+                                if (updateDto.ServiceFeePercent.HasValue) expense.ServiceFeePercent = updateDto.ServiceFeePercent.Value;
+                                if (updateDto.IsItemized.HasValue) expense.IsItemized = updateDto.IsItemized.Value;
+                                
+                                if (!string.IsNullOrEmpty(updateDto.PaidByMemberId))
+                                {
+                                    if (memberIdMappings.TryGetValue(updateDto.PaidByMemberId, out var mappedId))
+                                        expense.PaidById = mappedId;
+                                    else if (Guid.TryParse(updateDto.PaidByMemberId, out var remoteId))
+                                        expense.PaidById = remoteId;
+                                }
+
+                                if (updateDto.ParticipantIds != null)
+                                {
+                                    expense.Participants.Clear();
+                                    foreach (var pid in updateDto.ParticipantIds)
+                                    {
+                                        Guid? memberId = null;
+                                        if (memberIdMappings.TryGetValue(pid, out var mappedId))
+                                            memberId = mappedId;
+                                        else if (Guid.TryParse(pid, out var remoteId))
+                                            memberId = remoteId;
+
+                                        if (memberId.HasValue)
+                                        {
+                                            expense.Participants.Add(new ExpenseParticipant
+                                            {
+                                                ExpenseId = expense.Id,
+                                                MemberId = memberId.Value
+                                            });
+                                        }
+                                    }
+                                }
+                                expense.UpdatedAt = DateTime.UtcNow;
+                            }
+                        }
+                    }
+
+                    // 3.3 處理刪除費用
+                    if (request.Expenses.Delete != null)
+                    {
+                        foreach (var remoteId in request.Expenses.Delete)
+                        {
+                            var expense = bill.Expenses.FirstOrDefault(e => e.Id == remoteId);
+                            if (expense == null) continue;
+
+                            if (needsCarefulMerge)
+                            {
+                                conflicts.Add(new ConflictInfo
+                                {
+                                    Type = "expense",
+                                    EntityId = remoteId.ToString(),
+                                    Resolution = "manual_required",
+                                    ServerValue = "modified_by_others"
+                                });
+                            }
+                            else
+                            {
+                                bill.Expenses.Remove(expense);
+                            }
+                        }
+                    }
+                }
+
+                // 4. 處理費用細項 (與費用邏輯類似)
+                if (request.ExpenseItems != null)
                 {
-                    ExpenseId = expense.Id,
-                    MemberId = memberId
-                });
-            }
-        }
-    }
+                    // 4.1 新增細項
+                    if (request.ExpenseItems.Add != null)
+                    {
+                        foreach (var addDto in request.ExpenseItems.Add)
+                        {
+                            var expense = bill.Expenses.FirstOrDefault(e => e.Id == addDto.ExpenseId);
+                            if (expense == null) continue;
 
-    private static ExpenseItem CreateExpenseItemFromDto(
-        Guid expenseId,
-        SyncExpenseItemDto dto,
-        Dictionary<string, Guid> memberIdMappings)
-    {
-        var item = new ExpenseItem
-        {
-            Id = Guid.NewGuid(),
-            ExpenseId = expenseId,
-            Name = dto.Name,
-            Amount = dto.Amount,
-            PaidById = memberIdMappings.TryGetValue(dto.PaidByLocalId, out var paidById)
-                ? paidById
-                : Guid.Empty
-        };
+                            var item = new ExpenseItem
+                            {
+                                Id = Guid.NewGuid(),
+                                ExpenseId = expense.Id,
+                                Name = addDto.Name,
+                                Amount = addDto.Amount
+                            };
 
-        foreach (var localId in dto.ParticipantLocalIds)
-        {
-            if (memberIdMappings.TryGetValue(localId, out var memberId))
-            {
-                item.Participants.Add(new ExpenseItemParticipant
+                            if (!string.IsNullOrEmpty(addDto.PaidByMemberId))
+                            {
+                                if (memberIdMappings.TryGetValue(addDto.PaidByMemberId, out var mappedId))
+                                    item.PaidById = mappedId;
+                                else if (Guid.TryParse(addDto.PaidByMemberId, out var remoteId))
+                                    item.PaidById = remoteId;
+                            }
+
+                            if (addDto.ParticipantIds != null)
+                            {
+                                foreach (var pid in addDto.ParticipantIds)
+                                {
+                                    Guid? memberId = null;
+                                    if (memberIdMappings.TryGetValue(pid, out var mappedId))
+                                        memberId = mappedId;
+                                    else if (Guid.TryParse(pid, out var remoteId))
+                                        memberId = remoteId;
+
+                                    if (memberId.HasValue)
+                                    {
+                                        item.Participants.Add(new ExpenseItemParticipant
+                                        {
+                                            ExpenseItemId = item.Id,
+                                            MemberId = memberId.Value
+                                        });
+                                    }
+                                }
+                            }
+
+                            expense.Items.Add(item);
+                            expenseItemIdMappings[addDto.LocalId] = item.Id;
+                        }
+                    }
+
+                    // 4.2 更新細項
+                    if (request.ExpenseItems.Update != null)
+                    {
+                        foreach (var updateDto in request.ExpenseItems.Update)
+                        {
+                            var item = bill.Expenses.SelectMany(e => e.Items).FirstOrDefault(i => i.Id == updateDto.RemoteId);
+                            if (item == null)
+                            {
+                                conflicts.Add(new ConflictInfo
+                                {
+                                    Type = "expenseItem",
+                                    EntityId = updateDto.RemoteId.ToString(),
+                                    Resolution = "server_wins",
+                                    ServerValue = "deleted"
+                                });
+                                continue;
+                            }
+
+                            if (needsCarefulMerge)
+                            {
+                                conflicts.Add(new ConflictInfo
+                                {
+                                    Type = "expenseItem",
+                                    EntityId = item.Id.ToString(),
+                                    Resolution = "server_wins",
+                                    ServerValue = "modified_by_others"
+                                });
+                            }
+                            else
+                            {
+                                if (updateDto.Name != null) item.Name = updateDto.Name;
+                                if (updateDto.Amount.HasValue) item.Amount = updateDto.Amount.Value;
+
+                                if (!string.IsNullOrEmpty(updateDto.PaidByMemberId))
+                                {
+                                    if (memberIdMappings.TryGetValue(updateDto.PaidByMemberId, out var mappedId))
+                                        item.PaidById = mappedId;
+                                    else if (Guid.TryParse(updateDto.PaidByMemberId, out var remoteId))
+                                        item.PaidById = remoteId;
+                                }
+
+                                if (updateDto.ParticipantIds != null)
+                                {
+                                    item.Participants.Clear();
+                                    foreach (var pid in updateDto.ParticipantIds)
+                                    {
+                                        Guid? memberId = null;
+                                        if (memberIdMappings.TryGetValue(pid, out var mappedId))
+                                            memberId = mappedId;
+                                        else if (Guid.TryParse(pid, out var remoteId))
+                                            memberId = remoteId;
+
+                                        if (memberId.HasValue)
+                                        {
+                                            item.Participants.Add(new ExpenseItemParticipant
+                                            {
+                                                ExpenseItemId = item.Id,
+                                                MemberId = memberId.Value
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 4.3 刪除細項
+                    if (request.ExpenseItems.Delete != null)
+                    {
+                        foreach (var remoteId in request.ExpenseItems.Delete)
+                        {
+                            var item = bill.Expenses.SelectMany(e => e.Items).FirstOrDefault(i => i.Id == remoteId);
+                            if (item == null) continue;
+
+                            if (needsCarefulMerge)
+                            {
+                                conflicts.Add(new ConflictInfo
+                                {
+                                    Type = "expenseItem",
+                                    EntityId = remoteId.ToString(),
+                                    Resolution = "manual_required",
+                                    ServerValue = "modified_by_others"
+                                });
+                            }
+                            else
+                            {
+                                var expense = bill.Expenses.First(e => e.Id == item.ExpenseId);
+                                expense.Items.Remove(item);
+                            }
+                        }
+                    }
+                }
+
+                // 5. 處理結算變更
+                if (request.Settlements != null)
                 {
-                    ExpenseItemId = item.Id,
-                    MemberId = memberId
-                });
-            }
-        }
+                    // 處理 Mark (新增 SettledTransfer)
+                    if (request.Settlements.Mark != null)
+                    {
+                        foreach (var sDto in request.Settlements.Mark)
+                        {
+                            Guid? fromId = memberIdMappings.TryGetValue(sDto.FromMemberId, out var fMapped) ? fMapped : (Guid.TryParse(sDto.FromMemberId, out var fGuid) ? fGuid : null);
+                            Guid? toId = memberIdMappings.TryGetValue(sDto.ToMemberId, out var tMapped) ? tMapped : (Guid.TryParse(sDto.ToMemberId, out var tGuid) ? tGuid : null);
 
-        return item;
-    }
+                            if (fromId.HasValue && toId.HasValue)
+                            {
+                                if (!bill.SettledTransfers.Any(st => st.FromMemberId == fromId && st.ToMemberId == toId))
+                                {
+                                    bill.SettledTransfers.Add(new SettledTransfer
+                                    {
+                                        BillId = bill.Id,
+                                        FromMemberId = fromId.Value,
+                                        ToMemberId = toId.Value,
+                                        Amount = sDto.Amount,
+                                        SettledAt = DateTime.UtcNow
+                                    });
+                                }
+                            }
+                        }
+                    }
 
-    private static void UpdateExpenseItemFromDto(
-        ExpenseItem item,
-        SyncExpenseItemDto dto,
-        Dictionary<string, Guid> memberIdMappings)
-    {
-        item.Name = dto.Name;
-        item.Amount = dto.Amount;
-        item.PaidById = memberIdMappings.TryGetValue(dto.PaidByLocalId, out var paidById)
-            ? paidById
-            : item.PaidById;
+                    // 處理 Unmark (刪除 SettledTransfer)
+                    if (request.Settlements.Unmark != null)
+                    {
+                        foreach (var sDto in request.Settlements.Unmark)
+                        {
+                            Guid? fromId = Guid.TryParse(sDto.FromMemberId, out var fGuid) ? fGuid : null;
+                            Guid? toId = Guid.TryParse(sDto.ToMemberId, out var tGuid) ? tGuid : null;
 
-        item.Participants.Clear();
-        foreach (var localId in dto.ParticipantLocalIds)
-        {
-            if (memberIdMappings.TryGetValue(localId, out var memberId))
-            {
-                item.Participants.Add(new ExpenseItemParticipant
+                            if (fromId.HasValue && toId.HasValue)
+                            {
+                                var existing = bill.SettledTransfers.FirstOrDefault(st => st.FromMemberId == fromId && st.ToMemberId == toId);
+                                if (existing != null) bill.SettledTransfers.Remove(existing);
+                            }
+                        }
+                    }
+                }
+
+                // 6. 更新版本與儲存
+                bill.Version++;
+                bill.UpdatedAt = DateTime.UtcNow;
+                await _unitOfWork.SaveChangesAsync(ct);
+
+                // 發送 SignalR 通知
+                await _notificationService.NotifyBillUpdatedAsync(bill.Id, bill.Version, userId);
+
+                return new DeltaSyncResponse
                 {
-                    ExpenseItemId = item.Id,
-                    MemberId = memberId
-                });
-            }
+                    Success = conflicts.Count == 0,
+                    NewVersion = bill.Version,
+                    IdMappings = new DeltaIdMappingsDto
+                    {
+                        Members = memberIdMappings,
+                        Expenses = expenseIdMappings,
+                        ExpenseItems = expenseItemIdMappings
+                    },
+                    Conflicts = conflicts.Count > 0 ? conflicts : null,
+                    MergedBill = conflicts.Count > 0 ? MapToBillDto(bill) : null
+                };
+            }, ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            _unitOfWork.ClearChangeTracker();
+            var latestBill = await _unitOfWork.Bills.GetByIdWithDetailsAsync(billId, ct);
+            return new DeltaSyncResponse
+            {
+                Success = false,
+                NewVersion = latestBill?.Version ?? 0,
+                MergedBill = latestBill != null ? MapToBillDto(latestBill) : null
+            };
         }
     }
 
@@ -557,7 +1048,7 @@ public class BillService : IBillService
     {
         const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         return new string(Enumerable.Repeat(chars, 8)
-            .Select(s => s[Random.Next(s.Length)]).ToArray());
+            .Select(s => s[Random.Shared.Next(s.Length)]).ToArray());
     }
 
     private static BillDto MapToBillDto(Bill bill)
@@ -567,6 +1058,7 @@ public class BillService : IBillService
             bill.Name,
             bill.ShareCode,
             bill.Version,
+            bill.IsSettled,
             bill.CreatedAt,
             bill.UpdatedAt,
             bill.Members.Select(m => new MemberDto(
