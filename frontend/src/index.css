@@ -1,0 +1,192 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    :root {
+        /* Light Mode - Apple-inspired clean design */
+        --background: 0 0% 100%;
+        --foreground: 0 0% 0%;
+
+        /* Surfaces */
+        --card: 0 0% 100%;
+        --card-foreground: 0 0% 0%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 0 0% 0%;
+
+        /* Primary - Vibrant Blue (Apple Blue) */
+        --primary: 211 100% 50%;
+        --primary-foreground: 0 0% 100%;
+
+        /* Secondary - Teal accent */
+        --secondary: 175 84% 40%;
+        --secondary-foreground: 0 0% 100%;
+
+        /* Muted - Light gray backgrounds */
+        --muted: 220 14% 96%;
+        --muted-foreground: 220 9% 46%;
+
+        /* Accent - Soft blue tint */
+        --accent: 211 100% 96%;
+        --accent-foreground: 211 100% 35%;
+
+        /* Semantic colors */
+        --destructive: 0 84% 60%;
+        --destructive-foreground: 0 0% 100%;
+        --success: 142 71% 45%;
+        --success-foreground: 0 0% 100%;
+        --warning: 38 92% 50%;
+        --warning-foreground: 0 0% 0%;
+        --info: 199 89% 48%;
+        --info-foreground: 0 0% 100%;
+
+        /* Financial colors */
+        --positive: 142 71% 45%;
+        --negative: 0 84% 60%;
+
+        /* Borders & inputs */
+        --border: 220 13% 90%;
+        --input: 220 13% 90%;
+        --ring: 211 100% 50%;
+
+        --radius: 0.625rem;
+    }
+
+    .dark {
+        /* Dark Mode - Apple-style true dark */
+        --background: 0 0% 0%;
+        --foreground: 0 0% 98%;
+
+        /* Elevated surfaces (Apple's elevated dark) */
+        --card: 0 0% 11%;
+        --card-foreground: 0 0% 98%;
+        --popover: 0 0% 11%;
+        --popover-foreground: 0 0% 98%;
+
+        /* Primary - Brighter blue for dark mode */
+        --primary: 211 100% 60%;
+        --primary-foreground: 0 0% 0%;
+
+        /* Secondary - Brighter teal for dark mode */
+        --secondary: 175 84% 50%;
+        --secondary-foreground: 0 0% 0%;
+
+        /* Muted - Dark elevated surface */
+        --muted: 0 0% 15%;
+        --muted-foreground: 0 0% 64%;
+
+        /* Accent - Subtle blue tint on dark */
+        --accent: 211 50% 18%;
+        --accent-foreground: 211 100% 70%;
+
+        /* Semantic colors - More vibrant in dark mode */
+        --destructive: 0 72% 55%;
+        --destructive-foreground: 0 0% 100%;
+        --success: 142 76% 50%;
+        --success-foreground: 0 0% 0%;
+        --warning: 38 92% 55%;
+        --warning-foreground: 0 0% 0%;
+        --info: 199 89% 55%;
+        --info-foreground: 0 0% 0%;
+
+        /* Financial colors - More vibrant in dark mode */
+        --positive: 142 76% 50%;
+        --negative: 0 72% 55%;
+
+        /* Borders & inputs - Subtle separation */
+        --border: 0 0% 20%;
+        --input: 0 0% 20%;
+        --ring: 211 100% 60%;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+
+    html {
+        scroll-behavior: smooth;
+    }
+
+    body {
+        @apply bg-background text-foreground antialiased;
+    }
+
+    ::selection {
+        @apply bg-primary/20 text-foreground;
+    }
+}
+
+@layer utilities {
+    /* Interactive card with hover lift effect */
+    .interactive-card {
+        @apply transition-all duration-200 ease-out hover:shadow-elevated hover:-translate-y-0.5 active:scale-[0.99];
+    }
+
+    /* Pressable element with subtle scale feedback */
+    .pressable {
+        @apply transition-transform duration-150 active:scale-[0.97];
+    }
+
+    /* Fade in animation */
+    .animate-fade-in {
+        animation: fade-in 0.3s ease-out;
+    }
+
+    /* Fade in + slide up animation (supports stagger via --animation-delay) */
+    .animate-slide-up {
+        animation: slide-up 0.4s ease-out both;
+        animation-delay: var(--animation-delay, 0ms);
+    }
+
+    /* Scale + fade animation */
+    .animate-scale-in {
+        animation: scale-in 0.3s ease-out;
+    }
+}
+
+@keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slide-up {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes scale-in {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes slide-in-left {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(0);
+    }
+}
+
+@keyframes overlay-fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}

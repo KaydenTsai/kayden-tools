@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+        <IsTestProject>false</IsTestProject>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Test Framework -->
+        <PackageReference Include="xunit" Version="2.5.3"/>
+        <PackageReference Include="FluentAssertions" Version="8.8.0"/>
+        <PackageReference Include="NSubstitute" Version="5.3.0"/>
+
+        <!-- Fake Data Generator -->
+        <PackageReference Include="Bogus" Version="35.6.1"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Project References (inherit EF Core, DI, Logging from these) -->
+        <ProjectReference Include="..\..\KaydenTools.Models\KaydenTools.Models.csproj"/>
+        <ProjectReference Include="..\..\KaydenTools.Repositories\KaydenTools.Repositories.csproj"/>
+        <ProjectReference Include="..\..\KaydenTools.Services\KaydenTools.Services.csproj"/>
+        <ProjectReference Include="..\..\KaydenTools.Core\KaydenTools.Core.csproj"/>
+        <ProjectReference Include="..\..\KaydenTools.Migration\KaydenTools.Migration.csproj"/>
+    </ItemGroup>
+
+</Project>

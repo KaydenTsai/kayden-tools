@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>$(NoWarn);1591</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="FluentValidation.AspNetCore" Version="11.3.1"/>
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.*"/>
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.8"/>
+        <PackageReference Include="Serilog.AspNetCore" Version="10.0.0"/>
+        <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\KaydenTools.Core\KaydenTools.Core.csproj"/>
+        <ProjectReference Include="..\KaydenTools.Models\KaydenTools.Models.csproj"/>
+        <ProjectReference Include="..\KaydenTools.Repositories\KaydenTools.Repositories.csproj"/>
+        <ProjectReference Include="..\KaydenTools.Services\KaydenTools.Services.csproj"/>
+        <ProjectReference Include="..\KaydenTools.Migration\KaydenTools.Migration.csproj"/>
+    </ItemGroup>
+
+</Project>

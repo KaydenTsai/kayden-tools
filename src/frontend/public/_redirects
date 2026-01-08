@@ -1,6 +1,0 @@
-# OAuth callback - 確保靜態 HTML 被正確提供
-/auth/callback    /auth/callback/index.html   200
-/auth/callback/*  /auth/callback/index.html   200
-
-# SPA fallback
-/*    /index.html   200

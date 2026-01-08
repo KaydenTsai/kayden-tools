@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登入中...</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: #f5f5f5;
+        }
+        .container {
+            text-align: center;
+            padding: 2rem;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #e0e0e0;
+            border-top-color: #007AFF;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .message {
+            color: #666;
+            font-size: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <p class="message">正在處理登入...</p>
+    </div>
+    <script>
+        // 將 OAuth callback 參數傳遞給主應用
+        (function() {
+            console.log('[Callback] Processing OAuth callback...');
+            console.log('[Callback] URL:', window.location.href);
+
+            const params = new URLSearchParams(window.location.search);
+            const hashParams = new URLSearchParams(window.location.hash.slice(1));
+
+            // 合併 query 和 hash 參數
+            const allParams = new URLSearchParams();
+            params.forEach((v, k) => allParams.set(k, v));
+            hashParams.forEach((v, k) => allParams.set(k, v));
+
+            const paramsObj = Object.fromEntries(allParams);
+            console.log('[Callback] Params:', paramsObj);
+
+            // 發送消息給 opener 或重定向到主頁
+            if (window.opener) {
+                console.log('[Callback] Sending postMessage to opener...');
+                try {
+                    window.opener.postMessage({
+                        type: 'oauth-callback',
+                        params: paramsObj
+                    }, window.location.origin);
+                    console.log('[Callback] postMessage sent, closing window...');
+                    // 延遲關閉，確保消息送達
+                    setTimeout(() => window.close(), 100);
+                } catch (err) {
+                    console.error('[Callback] postMessage failed:', err);
+                    document.querySelector('.message').textContent = '登入處理失敗: ' + err.message;
+                }
+            } else {
+                console.log('[Callback] No opener, redirecting...');
+                // 沒有 opener，重定向到主頁並帶上參數
+                window.location.href = '/#/auth/callback?' + allParams.toString();
+            }
+        })();
+    </script>
+</body>
+</html>
