@@ -3,6 +3,7 @@ import {MainLayout} from '@/shared/components/layout/MainLayout';
 import {HomePage} from '@/tools/home/HomePage';
 import {SnapSplitPage} from '@/features/snap-split/pages/SnapSplitPage';
 import {ShareCodePage} from '@/features/snap-split/pages/ShareCodePage';
+import {AuthCallbackPage} from '@/shared/pages/AuthCallbackPage';
 
 // 暫時的佔位頁面
 const PlaceholderPage = ({name}: { name: string }) => (
@@ -48,6 +49,10 @@ export const router = createHashRouter([
             {
                 path: 'snap-split/share/:shareCode',
                 element: <ShareCodePage/>,
+            },
+            {
+                path: 'auth/callback',
+                element: <AuthCallbackPage/>,
             },
         ],
     },
