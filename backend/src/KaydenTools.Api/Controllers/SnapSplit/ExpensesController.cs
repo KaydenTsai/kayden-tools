@@ -1,7 +1,9 @@
 using Kayden.Commons.Common;
 using KaydenTools.Core.Common;
+using KaydenTools.Core.Interfaces;
 using KaydenTools.Models.SnapSplit.Dtos;
 using KaydenTools.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace KaydenTools.Api.Controllers.SnapSplit;
@@ -11,20 +13,24 @@ namespace KaydenTools.Api.Controllers.SnapSplit;
 /// </summary>
 [ApiController]
 [Route("api/snap-split")]
+[Authorize]
 [ApiExplorerSettings(GroupName = "snapsplit")]
 [Tags("Expenses")]
 [Produces("application/json")]
 public class ExpensesController : ControllerBase
 {
+    private readonly IBillAuthService _billAuthService;
+    private readonly ICurrentUserService _currentUserService;
     private readonly IExpenseService _expenseService;
 
     /// <summary>
     /// 建構子
     /// </summary>
-    /// <param name="expenseService">費用服務</param>
-    public ExpensesController(IExpenseService expenseService)
+    public ExpensesController(IExpenseService expenseService, IBillAuthService billAuthService, ICurrentUserService currentUserService)
     {
         _expenseService = expenseService;
+        _billAuthService = billAuthService;
+        _currentUserService = currentUserService;
     }
 
     /// <summary>
@@ -35,9 +41,13 @@ public class ExpensesController : ControllerBase
     /// <returns>費用詳情</returns>
     [HttpGet("expenses/{id:guid}")]
     [ProducesResponseType(typeof(ApiResponse<ExpenseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
     {
+        if (!await _billAuthService.IsOwnerOrParticipantByExpenseIdAsync(id, _currentUserService.UserId!.Value, ct))
+            return StatusCode(403, ApiResponse.Fail(ErrorCodes.Forbidden, "You do not have permission."));
+
         var result = await _expenseService.GetByIdAsync(id, ct);
         if (result.IsFailure) return NotFound(ApiResponse.Fail(result.Error.Code, result.Error.Message));
 
@@ -54,9 +64,13 @@ public class ExpensesController : ControllerBase
     [HttpPost("bills/{billId:guid}/expenses")]
     [ProducesResponseType(typeof(ApiResponse<ExpenseDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Create(Guid billId, [FromBody] CreateExpenseDto dto, CancellationToken ct)
     {
+        if (!await _billAuthService.IsOwnerOrParticipantAsync(billId, _currentUserService.UserId!.Value, ct))
+            return StatusCode(403, ApiResponse.Fail(ErrorCodes.Forbidden, "You do not have permission."));
+
         var result = await _expenseService.CreateAsync(billId, dto, ct);
         if (result.IsFailure)
         {
@@ -86,9 +100,13 @@ public class ExpensesController : ControllerBase
     [HttpPut("expenses/{id:guid}")]
     [ProducesResponseType(typeof(ApiResponse<ExpenseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateExpenseDto dto, CancellationToken ct)
     {
+        if (!await _billAuthService.IsOwnerOrParticipantByExpenseIdAsync(id, _currentUserService.UserId!.Value, ct))
+            return StatusCode(403, ApiResponse.Fail(ErrorCodes.Forbidden, "You do not have permission."));
+
         var result = await _expenseService.UpdateAsync(id, dto, ct);
         if (result.IsFailure)
         {
@@ -107,9 +125,13 @@ public class ExpensesController : ControllerBase
     /// <param name="ct">取消令牌</param>
     [HttpDelete("expenses/{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
+        if (!await _billAuthService.IsOwnerOrParticipantByExpenseIdAsync(id, _currentUserService.UserId!.Value, ct))
+            return StatusCode(403, ApiResponse.Fail(ErrorCodes.Forbidden, "You do not have permission."));
+
         var result = await _expenseService.DeleteAsync(id, ct);
         if (result.IsFailure) return NotFound(ApiResponse.Fail(result.Error.Code, result.Error.Message));
 

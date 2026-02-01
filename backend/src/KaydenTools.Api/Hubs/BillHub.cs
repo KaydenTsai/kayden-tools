@@ -2,6 +2,7 @@ using KaydenTools.Core.Interfaces;
 using KaydenTools.Models.SnapSplit.Dtos;
 using KaydenTools.Repositories.Interfaces;
 using KaydenTools.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
 namespace KaydenTools.Api.Hubs;
@@ -9,8 +10,10 @@ namespace KaydenTools.Api.Hubs;
 /// <summary>
 /// 帳單即時協作 Hub
 /// </summary>
+[Authorize]
 public class BillHub : Hub
 {
+    private readonly IBillAuthService _billAuthService;
     private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<BillHub> _logger;
     private readonly IOperationService _operationService;
@@ -20,12 +23,14 @@ public class BillHub : Hub
         IOperationService operationService,
         ICurrentUserService currentUserService,
         IUnitOfWork unitOfWork,
-        ILogger<BillHub> logger)
+        ILogger<BillHub> logger,
+        IBillAuthService billAuthService)
     {
         _operationService = operationService;
         _currentUserService = currentUserService;
         _unitOfWork = unitOfWork;
         _logger = logger;
+        _billAuthService = billAuthService;
     }
 
     /// <summary>
@@ -33,6 +38,10 @@ public class BillHub : Hub
     /// </summary>
     public async Task JoinBill(Guid billId)
     {
+        var userId = _currentUserService.UserId;
+        if (!userId.HasValue || !await _billAuthService.IsOwnerOrParticipantAsync(billId, userId.Value))
+            throw new HubException("Forbidden");
+
         await Groups.AddToGroupAsync(Context.ConnectionId, GetGroupName(billId));
         _logger.LogInformation("Client {ConnectionId} joined bill {BillId}", Context.ConnectionId, billId);
     }
@@ -53,10 +62,14 @@ public class BillHub : Hub
     {
         try
         {
+            var userId = _currentUserService.UserId;
+            if (!userId.HasValue || !await _billAuthService.IsOwnerOrParticipantAsync(request.BillId, userId.Value))
+                return new OperationResultDto(false, null, new OperationRejectedDto(
+                    request.ClientId, "Forbidden", 0, new List<OperationDto>()));
+
             _logger.LogInformation("SendOperation received: OpType={OpType}, BillId={BillId}, TargetId={TargetId}",
                 request.OpType, request.BillId, request.TargetId);
 
-            var userId = _currentUserService.UserId;
             _logger.LogInformation("Processing operation for user: {UserId}", userId);
 
             var result = await _operationService.ProcessOperationAsync(request, userId);

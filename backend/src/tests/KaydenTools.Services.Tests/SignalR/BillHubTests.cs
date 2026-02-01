@@ -27,6 +27,7 @@ public class BillHubTests
     private readonly HubCallerContext _context;
     private readonly IClientProxy _groupClientProxy;
     private readonly IClientProxy _othersInGroupProxy;
+    private readonly IBillAuthService _billAuthService;
 
     public BillHubTests()
     {
@@ -34,6 +35,7 @@ public class BillHubTests
         _currentUserService = Substitute.For<ICurrentUserService>();
         _unitOfWork = Substitute.For<IUnitOfWork>();
         _logger = Substitute.For<ILogger<BillHub>>();
+        _billAuthService = Substitute.For<IBillAuthService>();
         _clients = Substitute.For<IHubCallerClients>();
         _groups = Substitute.For<IGroupManager>();
         _context = Substitute.For<HubCallerContext>();
@@ -43,7 +45,11 @@ public class BillHubTests
         _context.ConnectionId.Returns("test-connection-id");
         _clients.OthersInGroup(Arg.Any<string>()).Returns(_othersInGroupProxy);
 
-        _sut = new BillHub(_operationService, _currentUserService, _unitOfWork, _logger)
+        // Default: allow all auth checks
+        _billAuthService.IsOwnerOrParticipantAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(true);
+
+        _sut = new BillHub(_operationService, _currentUserService, _unitOfWork, _logger, _billAuthService)
         {
             Clients = _clients,
             Groups = _groups,
@@ -59,6 +65,8 @@ public class BillHubTests
     {
         // Arrange
         var billId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        _currentUserService.UserId.Returns(userId);
 
         // Act
         await _sut.JoinBill(billId);
@@ -68,6 +76,22 @@ public class BillHubTests
             "test-connection-id",
             $"bill_{billId}",
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    [Trait("Category", "SignalR")]
+    public async Task JoinBill_無權限_應拋出HubException()
+    {
+        // Arrange
+        var billId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        _currentUserService.UserId.Returns(userId);
+        _billAuthService.IsOwnerOrParticipantAsync(billId, userId, Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        // Act & Assert
+        var act = () => _sut.JoinBill(billId);
+        await act.Should().ThrowAsync<HubException>().WithMessage("Forbidden");
     }
 
     [Fact]
@@ -144,7 +168,7 @@ public class BillHubTests
 
     [Fact]
     [Trait("Category", "SignalR")]
-    public async Task SendOperation_匿名使用者_應使用null作為userId()
+    public async Task SendOperation_匿名使用者_應回傳Forbidden錯誤()
     {
         // Arrange
         var billId = Guid.NewGuid();
@@ -160,27 +184,14 @@ public class BillHubTests
             1
         );
 
-        var operationDto = new OperationDto(
-            Guid.NewGuid(),
-            billId,
-            2,
-            "ADD_MEMBER",
-            null,
-            JsonDocument.Parse("{}"),
-            null,
-            "client-123",
-            DateTime.UtcNow
-        );
-
-        _operationService.ProcessOperationAsync(request, null, Arg.Any<CancellationToken>())
-            .Returns(Result.Success(operationDto));
-
         // Act
         var result = await _sut.SendOperation(request);
 
         // Assert
-        result.Success.Should().BeTrue();
-        await _operationService.Received(1).ProcessOperationAsync(request, null, Arg.Any<CancellationToken>());
+        result.Success.Should().BeFalse();
+        result.Rejected.Should().NotBeNull();
+        result.Rejected!.Reason.Should().Be("Forbidden");
+        await _operationService.DidNotReceive().ProcessOperationAsync(Arg.Any<OperationRequestDto>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>());
     }
 
     #endregion

@@ -22,6 +22,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMemberService, MemberService>();
         services.AddScoped<IExpenseService, ExpenseService>();
         services.AddScoped<ISettlementService, SettlementService>();
+        services.AddScoped<IBillAuthService, BillAuthService>();
 
         // UrlShortener Services
         services.AddScoped<IShortUrlService, ShortUrlService>();

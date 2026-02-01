@@ -18,16 +18,18 @@ namespace KaydenTools.Api.Controllers.SnapSplit;
 [Produces("application/json")]
 public class MembersController : ControllerBase
 {
+    private readonly IBillAuthService _billAuthService;
     private readonly ICurrentUserService _currentUserService;
     private readonly IMemberService _memberService;
 
     /// <summary>
     /// 建構子
     /// </summary>
-    public MembersController(IMemberService memberService, ICurrentUserService currentUserService)
+    public MembersController(IMemberService memberService, ICurrentUserService currentUserService, IBillAuthService billAuthService)
     {
         _memberService = memberService;
         _currentUserService = currentUserService;
+        _billAuthService = billAuthService;
     }
 
     /// <summary>
@@ -38,11 +40,16 @@ public class MembersController : ControllerBase
     /// <param name="ct">取消令牌</param>
     /// <returns>新建立的成員</returns>
     [HttpPost("bills/{billId:guid}/members")]
+    [Authorize]
     [ProducesResponseType(typeof(ApiResponse<MemberDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Create(Guid billId, [FromBody] CreateMemberDto dto, CancellationToken ct)
     {
+        if (!await _billAuthService.IsOwnerOrParticipantAsync(billId, _currentUserService.UserId!.Value, ct))
+            return StatusCode(403, ApiResponse.Fail(ErrorCodes.Forbidden, "You do not have permission."));
+
         var result = await _memberService.CreateAsync(billId, dto, ct);
         if (result.IsFailure)
         {
@@ -65,10 +72,15 @@ public class MembersController : ControllerBase
     /// <param name="ct">取消令牌</param>
     /// <returns>更新後的成員</returns>
     [HttpPut("members/{id:guid}")]
+    [Authorize]
     [ProducesResponseType(typeof(ApiResponse<MemberDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateMemberDto dto, CancellationToken ct)
     {
+        if (!await _billAuthService.IsOwnerOrParticipantByMemberIdAsync(id, _currentUserService.UserId!.Value, ct))
+            return StatusCode(403, ApiResponse.Fail(ErrorCodes.Forbidden, "You do not have permission."));
+
         var result = await _memberService.UpdateAsync(id, dto, ct);
         if (result.IsFailure) return NotFound(ApiResponse.Fail(result.Error.Code, result.Error.Message));
 
@@ -81,11 +93,16 @@ public class MembersController : ControllerBase
     /// <param name="id">成員 ID</param>
     /// <param name="ct">取消令牌</param>
     [HttpDelete("members/{id:guid}")]
+    [Authorize]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
+        if (!await _billAuthService.IsOwnerOrParticipantByMemberIdAsync(id, _currentUserService.UserId!.Value, ct))
+            return StatusCode(403, ApiResponse.Fail(ErrorCodes.Forbidden, "You do not have permission."));
+
         var result = await _memberService.DeleteAsync(id, ct);
         if (result.IsFailure)
         {

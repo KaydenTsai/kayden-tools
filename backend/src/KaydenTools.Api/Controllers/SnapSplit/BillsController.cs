@@ -18,13 +18,15 @@ namespace KaydenTools.Api.Controllers.SnapSplit;
 [Produces("application/json")]
 public class BillsController : ControllerBase
 {
+    private readonly IBillAuthService _billAuthService;
     private readonly IBillService _billService;
     private readonly ICurrentUserService _currentUserService;
 
-    public BillsController(IBillService billService, ICurrentUserService currentUserService)
+    public BillsController(IBillService billService, ICurrentUserService currentUserService, IBillAuthService billAuthService)
     {
         _billService = billService;
         _currentUserService = currentUserService;
+        _billAuthService = billAuthService;
     }
 
     /// <summary>
@@ -34,10 +36,15 @@ public class BillsController : ControllerBase
     /// <param name="ct">取消令牌</param>
     /// <returns>帳單詳情</returns>
     [HttpGet("{id:guid}", Name = "GetBillById")]
+    [Authorize]
     [ProducesResponseType(typeof(ApiResponse<BillDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
     {
+        if (!await _billAuthService.IsOwnerOrParticipantAsync(id, _currentUserService.UserId!.Value, ct))
+            return StatusCode(403, ApiResponse.Fail(ErrorCodes.Forbidden, "You do not have permission."));
+
         var result = await _billService.GetByIdAsync(id, ct);
         if (result.IsFailure) return NotFound(ApiResponse.Fail(result.Error.Code, result.Error.Message));
 
@@ -86,6 +93,7 @@ public class BillsController : ControllerBase
     /// <param name="ct">取消令牌</param>
     /// <returns>新建立的帳單</returns>
     [HttpPost(Name = "CreateBill")]
+    [Authorize]
     [ProducesResponseType(typeof(ApiResponse<BillDto>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateBillDto dto, CancellationToken ct)
@@ -107,10 +115,15 @@ public class BillsController : ControllerBase
     /// <param name="ct">取消令牌</param>
     /// <returns>更新後的帳單</returns>
     [HttpPut("{id:guid}", Name = "UpdateBill")]
+    [Authorize]
     [ProducesResponseType(typeof(ApiResponse<BillDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateBillDto dto, CancellationToken ct)
     {
+        if (!await _billAuthService.IsOwnerOrParticipantAsync(id, _currentUserService.UserId!.Value, ct))
+            return StatusCode(403, ApiResponse.Fail(ErrorCodes.Forbidden, "You do not have permission."));
+
         var result = await _billService.UpdateAsync(id, dto, ct);
         if (result.IsFailure) return NotFound(ApiResponse.Fail(result.Error.Code, result.Error.Message));
 
@@ -123,10 +136,15 @@ public class BillsController : ControllerBase
     /// <param name="id">帳單 ID</param>
     /// <param name="ct">取消令牌</param>
     [HttpDelete("{id:guid}", Name = "DeleteBill")]
+    [Authorize]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
+        if (!await _billAuthService.IsOwnerAsync(id, _currentUserService.UserId!.Value, ct))
+            return StatusCode(403, ApiResponse.Fail(ErrorCodes.Forbidden, "You do not have permission."));
+
         var result = await _billService.DeleteAsync(id, ct);
         if (result.IsFailure) return NotFound(ApiResponse.Fail(result.Error.Code, result.Error.Message));
 
@@ -140,10 +158,15 @@ public class BillsController : ControllerBase
     /// <param name="ct">取消令牌</param>
     /// <returns>分享碼</returns>
     [HttpPost("{id:guid}/share-code", Name = "GenerateShareCode")]
+    [Authorize]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GenerateShareCode(Guid id, CancellationToken ct)
     {
+        if (!await _billAuthService.IsOwnerAsync(id, _currentUserService.UserId!.Value, ct))
+            return StatusCode(403, ApiResponse.Fail(ErrorCodes.Forbidden, "You do not have permission."));
+
         var result = await _billService.GenerateShareCodeAsync(id, ct);
         if (result.IsFailure) return NotFound(ApiResponse.Fail(result.Error.Code, result.Error.Message));
 
@@ -157,6 +180,7 @@ public class BillsController : ControllerBase
     /// <param name="ct">取消令牌</param>
     /// <returns>同步結果</returns>
     [HttpPost("sync", Name = "SyncBill")]
+    [Authorize]
     [ProducesResponseType(typeof(ApiResponse<SyncBillResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
@@ -189,12 +213,17 @@ public class BillsController : ControllerBase
     /// <param name="ct">取消令牌</param>
     /// <returns>同步回應，包含新版本號與 ID 映射</returns>
     [HttpPost("{id:guid}/delta-sync", Name = "DeltaSyncBill")]
+    [Authorize]
     [ProducesResponseType(typeof(ApiResponse<DeltaSyncResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeltaSync(Guid id, [FromBody] DeltaSyncRequest request, CancellationToken ct)
     {
         if (!ModelState.IsValid) return BadRequest(ApiResponse.Fail(ErrorCodes.ValidationError, "Validation failed."));
+
+        if (!await _billAuthService.IsOwnerOrParticipantAsync(id, _currentUserService.UserId!.Value, ct))
+            return StatusCode(403, ApiResponse.Fail(ErrorCodes.Forbidden, "You do not have permission."));
 
         var result = await _billService.DeltaSyncAsync(id, request, _currentUserService.UserId, ct);
         if (result.IsFailure)
