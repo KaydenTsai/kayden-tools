@@ -1,4 +1,5 @@
 using Kayden.Commons.Common;
+using Kayden.Commons.Interfaces;
 using KaydenTools.Core.Common;
 using KaydenTools.Models.SnapSplit.Dtos;
 using KaydenTools.Models.SnapSplit.Entities;
@@ -13,14 +14,17 @@ namespace KaydenTools.Services.SnapSplit;
 public class MemberService : IMemberService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IDateTimeService _dateTimeService;
 
     /// <summary>
     /// 建構子
     /// </summary>
     /// <param name="unitOfWork">工作單元</param>
-    public MemberService(IUnitOfWork unitOfWork)
+    /// <param name="dateTimeService">時間服務</param>
+    public MemberService(IUnitOfWork unitOfWork, IDateTimeService dateTimeService)
     {
         _unitOfWork = unitOfWork;
+        _dateTimeService = dateTimeService;
     }
 
     #region IMemberService Members
@@ -115,7 +119,7 @@ public class MemberService : IMemberService
         member.OriginalName ??= member.Name; // 只在首次認領時保存原始名稱
         member.Name = dto.DisplayName ?? user.DisplayName ?? member.Name;
         member.LinkedUserId = userId;
-        member.ClaimedAt = DateTime.UtcNow;
+        member.ClaimedAt = _dateTimeService.UtcNow;
 
         _unitOfWork.Members.Update(member);
         await _unitOfWork.SaveChangesAsync(ct);

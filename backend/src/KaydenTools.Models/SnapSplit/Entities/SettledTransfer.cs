@@ -1,7 +1,8 @@
 namespace KaydenTools.Models.SnapSplit.Entities;
 
 /// <summary>
-/// 已結清轉帳實體（複合主鍵：bill_id, from_member_id, to_member_id）
+/// 已結清轉帳實體（複合主鍵：bill_id, from_member_id, to_member_id）。
+/// 不實作 ISoftDeletable — unmark 語意為「轉帳尚未完成」，刪除記錄語意正確；操作歷史由 Operation 追蹤。
 /// </summary>
 public class SettledTransfer
 {

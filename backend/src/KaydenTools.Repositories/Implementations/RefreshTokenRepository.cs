@@ -1,3 +1,4 @@
+using Kayden.Commons.Interfaces;
 using KaydenTools.Models.Shared.Entities;
 using KaydenTools.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -6,8 +7,11 @@ namespace KaydenTools.Repositories.Implementations;
 
 public class RefreshTokenRepository : Repository<RefreshToken>, IRefreshTokenRepository
 {
-    public RefreshTokenRepository(AppDbContext context) : base(context)
+    private readonly IDateTimeService _dateTimeService;
+
+    public RefreshTokenRepository(AppDbContext context, IDateTimeService dateTimeService) : base(context)
     {
+        _dateTimeService = dateTimeService;
     }
 
     #region IRefreshTokenRepository Members
@@ -23,7 +27,7 @@ public class RefreshTokenRepository : Repository<RefreshToken>, IRefreshTokenRep
         CancellationToken ct = default)
     {
         return await DbSet
-            .Where(rt => rt.UserId == userId && rt.RevokedAt == null && rt.ExpiresAt > DateTime.UtcNow)
+            .Where(rt => rt.UserId == userId && rt.RevokedAt == null && rt.ExpiresAt > _dateTimeService.UtcNow)
             .ToListAsync(ct);
     }
 
@@ -33,7 +37,7 @@ public class RefreshTokenRepository : Repository<RefreshToken>, IRefreshTokenRep
             .Where(rt => rt.UserId == userId && rt.RevokedAt == null)
             .ToListAsync(ct);
 
-        var now = DateTime.UtcNow;
+        var now = _dateTimeService.UtcNow;
         foreach (var token in tokens) token.RevokedAt = now;
     }
 

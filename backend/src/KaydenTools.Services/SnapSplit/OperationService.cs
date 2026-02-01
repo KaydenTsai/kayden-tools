@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Kayden.Commons.Common;
+using Kayden.Commons.Interfaces;
 using KaydenTools.Core.Common;
 using KaydenTools.Models.SnapSplit.Dtos;
 using KaydenTools.Models.SnapSplit.Entities;
@@ -12,10 +13,12 @@ namespace KaydenTools.Services.SnapSplit;
 public class OperationService : IOperationService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IDateTimeService _dateTimeService;
 
-    public OperationService(IUnitOfWork unitOfWork)
+    public OperationService(IUnitOfWork unitOfWork, IDateTimeService dateTimeService)
     {
         _unitOfWork = unitOfWork;
+        _dateTimeService = dateTimeService;
     }
 
     #region IOperationService Members
@@ -58,7 +61,7 @@ public class OperationService : IOperationService
                     Payload = payloadDocument,
                     CreatedByUserId = userId,
                     ClientId = request.ClientId,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = _dateTimeService.UtcNow
                 };
 
                 // 3. 套用變更到 Snapshot (Read Models)
@@ -67,7 +70,7 @@ public class OperationService : IOperationService
 
                 // 4. 更新帳單版本
                 bill.Version = nextVersion;
-                bill.UpdatedAt = DateTime.UtcNow;
+                bill.UpdatedAt = _dateTimeService.UtcNow;
 
                 // 5. 儲存到資料庫（在同一交易中）
                 // bill 是從資料庫載入的，EF Core 會自動追蹤變更，不需要呼叫 Update()
@@ -130,7 +133,7 @@ public class OperationService : IOperationService
                 {
                     if (payload.TryGetProperty("name", out var mName)) member.Name = mName.GetString() ?? member.Name;
                     if (payload.TryGetProperty("displayOrder", out var mOrder)) member.DisplayOrder = mOrder.GetInt32();
-                    member.UpdatedAt = DateTime.UtcNow;
+                    member.UpdatedAt = _dateTimeService.UtcNow;
                 }
 
                 break;
@@ -141,8 +144,8 @@ public class OperationService : IOperationService
                 {
                     memberToClaim.OriginalName = memberToClaim.Name;
                     memberToClaim.LinkedUserId = op.CreatedByUserId;
-                    memberToClaim.ClaimedAt = DateTime.UtcNow;
-                    memberToClaim.UpdatedAt = DateTime.UtcNow;
+                    memberToClaim.ClaimedAt = _dateTimeService.UtcNow;
+                    memberToClaim.UpdatedAt = _dateTimeService.UtcNow;
                 }
 
                 break;
@@ -155,7 +158,7 @@ public class OperationService : IOperationService
                     memberToUnclaim.OriginalName = null;
                     memberToUnclaim.LinkedUserId = null;
                     memberToUnclaim.ClaimedAt = null;
-                    memberToUnclaim.UpdatedAt = DateTime.UtcNow;
+                    memberToUnclaim.UpdatedAt = _dateTimeService.UtcNow;
                 }
 
                 break;
@@ -172,7 +175,7 @@ public class OperationService : IOperationService
                         if (m != null)
                         {
                             m.DisplayOrder = i;
-                            m.UpdatedAt = DateTime.UtcNow;
+                            m.UpdatedAt = _dateTimeService.UtcNow;
                         }
                     }
                 }
@@ -227,7 +230,7 @@ public class OperationService : IOperationService
                             ExpenseId = expForParticipants.Id,
                             MemberId = pid.GetGuid()
                         });
-                    expForParticipants.UpdatedAt = DateTime.UtcNow;
+                    expForParticipants.UpdatedAt = _dateTimeService.UtcNow;
                 }
 
                 break;
@@ -237,7 +240,7 @@ public class OperationService : IOperationService
                 if (expForItemized != null)
                 {
                     expForItemized.IsItemized = !expForItemized.IsItemized;
-                    expForItemized.UpdatedAt = DateTime.UtcNow;
+                    expForItemized.UpdatedAt = _dateTimeService.UtcNow;
                 }
 
                 break;
@@ -265,7 +268,7 @@ public class OperationService : IOperationService
                             : expenseForNewItem.PaidById
                     };
                     expenseForNewItem.Items.Add(newItem);
-                    expenseForNewItem.UpdatedAt = DateTime.UtcNow;
+                    expenseForNewItem.UpdatedAt = _dateTimeService.UtcNow;
                 }
 
                 break;
@@ -290,7 +293,7 @@ public class OperationService : IOperationService
                 if (itemToDelete != null && parentExpense != null)
                 {
                     parentExpense.Items.Remove(itemToDelete);
-                    parentExpense.UpdatedAt = DateTime.UtcNow;
+                    parentExpense.UpdatedAt = _dateTimeService.UtcNow;
                 }
 
                 break;
@@ -329,7 +332,7 @@ public class OperationService : IOperationService
                             FromMemberId = fromMemberId,
                             ToMemberId = toMemberId,
                             Amount = amount,
-                            SettledAt = DateTime.UtcNow
+                            SettledAt = _dateTimeService.UtcNow
                         });
                 }
 

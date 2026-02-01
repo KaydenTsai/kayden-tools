@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Kayden.Commons.Interfaces;
 using KaydenTools.Core.Configuration.Settings;
 using KaydenTools.Models.Shared.Entities;
 using KaydenTools.Services.Interfaces;
@@ -12,10 +13,12 @@ namespace KaydenTools.Services.Auth;
 public class JwtService : IJwtService
 {
     private readonly JwtSettings _settings;
+    private readonly IDateTimeService _dateTimeService;
 
-    public JwtService(JwtSettings settings)
+    public JwtService(JwtSettings settings, IDateTimeService dateTimeService)
     {
         _settings = settings;
+        _dateTimeService = dateTimeService;
     }
 
     #region IJwtService Members
@@ -41,7 +44,7 @@ public class JwtService : IJwtService
             _settings.Issuer,
             _settings.Audience,
             claims,
-            expires: DateTime.UtcNow.AddMinutes(_settings.AccessTokenExpirationMinutes),
+            expires: _dateTimeService.UtcNow.AddMinutes(_settings.AccessTokenExpirationMinutes),
             signingCredentials: credentials
         );
 

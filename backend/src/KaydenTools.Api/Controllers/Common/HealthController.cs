@@ -1,4 +1,5 @@
 using Kayden.Commons.Common;
+using Kayden.Commons.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 namespace KaydenTools.Api.Controllers.Common;
@@ -11,7 +12,7 @@ namespace KaydenTools.Api.Controllers.Common;
 [ApiExplorerSettings(GroupName = "common")]
 [Tags("Health")]
 [Produces("application/json")]
-public class HealthController : ControllerBase
+public class HealthController(IDateTimeService dateTimeService) : ControllerBase
 {
     /// <summary>
     /// 取得服務健康狀態
@@ -23,7 +24,7 @@ public class HealthController : ControllerBase
         return Ok(ApiResponse.Ok(new
         {
             status = "healthy",
-            timestamp = DateTime.UtcNow
+            timestamp = dateTimeService.UtcNow
         }));
     }
 }

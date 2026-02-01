@@ -1,7 +1,8 @@
 namespace KaydenTools.Models.SnapSplit.Entities;
 
 /// <summary>
-/// 費用分攤者（多對多關聯表）
+/// 費用分攤者（多對多關聯表）。
+/// 不實作 ISoftDeletable — join table 使用 clear + rebuild 模式，soft delete 會累積無意義的孤兒記錄。
 /// </summary>
 public class ExpenseParticipant
 {

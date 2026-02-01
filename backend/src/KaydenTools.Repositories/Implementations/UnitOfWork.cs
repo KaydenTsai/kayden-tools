@@ -1,3 +1,4 @@
+using Kayden.Commons.Interfaces;
 using KaydenTools.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -6,6 +7,7 @@ namespace KaydenTools.Repositories.Implementations;
 public class UnitOfWork : IUnitOfWork
 {
     private readonly AppDbContext _context;
+    private readonly IDateTimeService _dateTimeService;
     private IBillRepository? _bills;
     private IExpenseRepository? _expenses;
     private IExpenseItemRepository? _expenseItems;
@@ -19,15 +21,16 @@ public class UnitOfWork : IUnitOfWork
 
     private IUserRepository? _users;
 
-    public UnitOfWork(AppDbContext context)
+    public UnitOfWork(AppDbContext context, IDateTimeService dateTimeService)
     {
         _context = context;
+        _dateTimeService = dateTimeService;
     }
 
     #region IUnitOfWork Members
 
     public IUserRepository Users => _users ??= new UserRepository(_context);
-    public IRefreshTokenRepository RefreshTokens => _refreshTokens ??= new RefreshTokenRepository(_context);
+    public IRefreshTokenRepository RefreshTokens => _refreshTokens ??= new RefreshTokenRepository(_context, _dateTimeService);
     public IBillRepository Bills => _bills ??= new BillRepository(_context);
     public IMemberRepository Members => _members ??= new MemberRepository(_context);
     public IExpenseRepository Expenses => _expenses ??= new ExpenseRepository(_context);
@@ -104,6 +107,12 @@ public class UnitOfWork : IUnitOfWork
     {
         _transaction?.Dispose();
         _context.Dispose();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_transaction != null) await _transaction.DisposeAsync();
+        await _context.DisposeAsync();
     }
 
     #endregion

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FluentAssertions;
 using Kayden.Commons.Common;
+using Kayden.Commons.Interfaces;
 using KaydenTools.Core.Common;
 using KaydenTools.Models.SnapSplit.Dtos;
 using KaydenTools.Models.SnapSplit.Entities;
@@ -18,10 +19,13 @@ public class OperationServiceTests
 {
     private readonly OperationService _sut;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IDateTimeService _dateTimeService;
 
     public OperationServiceTests()
     {
         _unitOfWork = Substitute.For<IUnitOfWork>();
+        _dateTimeService = Substitute.For<IDateTimeService>();
+        _dateTimeService.UtcNow.Returns(DateTime.UtcNow);
 
         // 模擬 ExecuteInTransactionAsync 直接執行傳入的函數
         _unitOfWork.ExecuteInTransactionAsync(Arg.Any<Func<Task<Result<OperationDto>>>>(), Arg.Any<CancellationToken>())
@@ -31,7 +35,7 @@ public class OperationServiceTests
                 return await func();
             });
 
-        _sut = new OperationService(_unitOfWork);
+        _sut = new OperationService(_unitOfWork, _dateTimeService);
     }
 
     #region ProcessOperationAsync - 基本測試

@@ -1,9 +1,11 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using Kayden.Commons.Interfaces;
 using FluentAssertions;
 using KaydenTools.Core.Configuration.Settings;
 using KaydenTools.Models.Shared.Entities;
 using KaydenTools.Services.Auth;
+using NSubstitute;
 
 namespace KaydenTools.Services.Tests.Auth;
 
@@ -14,6 +16,7 @@ public class JwtServiceTests
 {
     private readonly JwtService _sut;
     private readonly JwtSettings _settings;
+    private readonly IDateTimeService _dateTimeService;
 
     public JwtServiceTests()
     {
@@ -25,7 +28,9 @@ public class JwtServiceTests
             AccessTokenExpirationMinutes = 15,
             RefreshTokenExpirationDays = 7
         };
-        _sut = new JwtService(_settings);
+        _dateTimeService = Substitute.For<IDateTimeService>();
+        _dateTimeService.UtcNow.Returns(DateTime.UtcNow);
+        _sut = new JwtService(_settings, _dateTimeService);
     }
 
     #region GenerateAccessToken 測試
@@ -274,7 +279,7 @@ public class JwtServiceTests
             Audience = _settings.Audience,
             AccessTokenExpirationMinutes = 15
         };
-        var otherService = new JwtService(otherSettings);
+        var otherService = new JwtService(otherSettings, _dateTimeService);
 
         var user = new User
         {
@@ -302,7 +307,7 @@ public class JwtServiceTests
             Audience = _settings.Audience,
             AccessTokenExpirationMinutes = 15
         };
-        var otherService = new JwtService(otherSettings);
+        var otherService = new JwtService(otherSettings, _dateTimeService);
 
         var user = new User
         {

@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Kayden.Commons.Common;
+using Kayden.Commons.Interfaces;
 using KaydenTools.Core.Common;
 using KaydenTools.Models.Shared.Entities;
 using KaydenTools.Models.SnapSplit.Dtos;
@@ -17,11 +18,14 @@ public class MemberServiceTests
 {
     private readonly MemberService _sut;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IDateTimeService _dateTimeService;
 
     public MemberServiceTests()
     {
         _unitOfWork = Substitute.For<IUnitOfWork>();
-        _sut = new MemberService(_unitOfWork);
+        _dateTimeService = Substitute.For<IDateTimeService>();
+        _dateTimeService.UtcNow.Returns(DateTime.UtcNow);
+        _sut = new MemberService(_unitOfWork, _dateTimeService);
     }
 
     #region ClaimAsync 認領成員測試

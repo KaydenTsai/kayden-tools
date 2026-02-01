@@ -57,7 +57,7 @@ public class Operation : IEntity
     /// <summary>
     /// 建立時間
     /// </summary>
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; }
 
     #region IEntity Members
 
