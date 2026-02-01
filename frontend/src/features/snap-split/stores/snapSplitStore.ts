@@ -1,8 +1,13 @@
+/**
+ * SnapSplit Store Convention:
+ * Store action 中 get() 與 set() 之間不得有 await，
+ * 否則會產生競態條件（state 在 await 期間可能被其他 action 修改）。
+ * 若需要 async 操作，應先完成 await，再同步執行 get() → 計算 → set() 。
+ */
 import {create} from "zustand";
 import {persist} from "zustand/middleware";
 import type {Bill, Expense, Member, SyncStatus} from "@/features/snap-split/types/snap-split";
 import type {IdMappings} from "@/features/snap-split/types/sync";
-import {applyOperationToBill} from "@/features/snap-split/services/operations/applier";
 import {applyIdMappingsToBill, rebaseBillFromServer} from "@/features/snap-split/services/billAdapter";
 import {createBillSnapshot} from "@/features/snap-split/services/deltaFactory";
 import {createSettledKey, matchSettledKeyPrefix} from "@/features/snap-split/lib/settlement";
@@ -78,8 +83,6 @@ export interface SnapSplitState {
     updateExpense: (id: string, updates: any) => void;
     toggleSettlement: (fromId: string, toId: string) => void;
 
-    // Legacy Dispatch (Optional, keep if needed for compatibility or remove)
-    dispatch: (opType: string, targetId: string | undefined, payload: any) => void;
 }
 
 export const useSnapSplitStore = create<SnapSplitState>()(
@@ -662,28 +665,6 @@ export const useSnapSplitStore = create<SnapSplitState>()(
                 }));
             },
 
-            // Dispatch stub
-            dispatch: (opType, targetId, payload) => {
-                const {currentBillId} = get();
-                const bill = get().bills.find(b => b.id === currentBillId);
-                if (bill) {
-                    const localOp = {
-                        id: generateId(),
-                        billId: bill.id,
-                        version: -1,
-                        opType,
-                        targetId,
-                        payload,
-                        clientId: generateId(),
-                        createdAt: now()
-                    };
-                    // Only apply locally
-                    const updatedBill = applyOperationToBill(bill, localOp);
-                    set(state => ({
-                        bills: state.bills.map(b => b.id === bill.id ? updatedBill : b)
-                    }));
-                }
-            },
         }),
         {
             name: 'kayden-tools-snap-split-v3',

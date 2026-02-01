@@ -10,7 +10,6 @@ export function ShareCodePage() {
     const {shareCode} = useParams<{ shareCode: string }>();
     const navigate = useNavigate();
     const {fetchBillByShareCode, isDownloading, downloadError} = useBillSync();
-    const {bills} = useSnapSplitStore();
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -22,7 +21,8 @@ export function ShareCodePage() {
                 return;
             }
 
-            // 檢查本地是否已有此帳單
+            // 從 store 快照讀取，避免將 bills 加入依賴陣列
+            const bills = useSnapSplitStore.getState().bills;
             const existingBill = bills.find(b => b.shareCode === shareCode);
             if (existingBill) {
                 navigate('/tools/snapsplit', {replace: true});
@@ -40,7 +40,7 @@ export function ShareCodePage() {
         };
 
         loadBill();
-    }, [shareCode, fetchBillByShareCode, bills, navigate]);
+    }, [shareCode, fetchBillByShareCode, navigate]);
 
     const handleGoHome = () => {
         navigate('/tools/snapsplit', {replace: true});

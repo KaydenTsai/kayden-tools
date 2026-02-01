@@ -11,7 +11,6 @@
 
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { buildDeltaSyncRequest, isDeltaEmpty, createBillSnapshot } from '../deltaFactory';
-import { applyOperationToBill } from '../operations/applier';
 import type { Bill, Member, Expense } from '../../types/snap-split';
 import type { BillSnapshot } from '../../types/sync';
 
@@ -161,32 +160,6 @@ describe('Contract Tests: Delta Sync Request Building', () => {
 // ============================================================================
 
 describe('Invariant Tests: 系統不變式', () => {
-    describe('不變式 1: 本地變更不應被靜默覆蓋', () => {
-        it('當 syncStatus === "modified" 時，rebase 應該被阻止或發出警告', () => {
-            const modifiedBill = createSyncedBill({
-                syncStatus: 'modified',
-                expenses: [createExpense({ amount: 200 })],  // 本地變更
-            });
-
-            // 模擬 SignalR 推送的操作
-            const remoteOperation = {
-                opType: 'EXPENSE_UPDATE' as const,
-                targetId: 'expense-local-1',
-                payload: { amount: 100 },  // 遠端舊值
-                version: 2,
-            };
-
-            // 目前行為：直接覆蓋
-            const result = applyOperationToBill(modifiedBill, remoteOperation);
-
-            // 這裡記錄 bug：本地 200 被遠端 100 覆蓋了
-            expect(result.expenses[0].amount).toBe(100);  // 目前的錯誤行為
-
-            // 理想行為：應該保留本地變更或產生衝突
-            // expect(result.syncStatus).toBe('conflict'); // 理想行為
-        });
-    });
-
     describe('不變式 2: Snapshot 必須在同步成功後更新', () => {
         it('createBillSnapshot 應該正確捕捉帳單狀態', () => {
             const bill = createSyncedBill({
@@ -342,32 +315,6 @@ describe('Scenario Tests: 多用戶協作場景', () => {
             expect(deltaRequest.members?.update?.[0].claimedAt).toBe('2024-01-01T12:00:00Z');
         });
 
-        it('B 收到認領操作後應該更新本地狀態', () => {
-            const bill = createSyncedBill({
-                members: [createMember({
-                    id: 'member-1',
-                    remoteId: 'member-remote-1',
-                    name: 'Alice',
-                })],
-            });
-
-            // 模擬從 SignalR 收到的 MEMBER_CLAIM 操作
-            const claimOperation = {
-                opType: 'MEMBER_CLAIM' as const,
-                targetId: 'member-1',
-                payload: {
-                    userId: 'user-123',
-                    avatarUrl: 'https://example.com/avatar.jpg',
-                },
-                version: 2,
-            };
-
-            const result = applyOperationToBill(bill, claimOperation);
-
-            expect(result.members[0].userId).toBe('user-123');
-            expect(result.members[0].avatarUrl).toBe('https://example.com/avatar.jpg');
-            expect(result.members[0].claimedAt).toBeDefined();
-        });
     });
 
     describe('場景 3: 網路斷線期間的離線編輯', () => {
@@ -426,28 +373,6 @@ describe('Regression Tests: 已知 Bug 驗證', () => {
         });
     });
 
-    describe('BUG-002: Rebase 覆蓋本地變更', () => {
-        it('applyOperationToBill 會覆蓋本地變更（記錄 bug 行為）', () => {
-            const bill = createSyncedBill({
-                syncStatus: 'modified',
-                expenses: [createExpense({
-                    id: 'e1',
-                    amount: 200,
-                })],
-            });
-
-            const remoteOp = {
-                opType: 'EXPENSE_UPDATE' as const,
-                targetId: 'e1',
-                payload: { amount: 100 },
-                version: 2,
-            };
-
-            const result = applyOperationToBill(bill, remoteOp);
-
-            expect(result.expenses[0].amount).toBe(100);
-        });
-    });
 });
 
 // ============================================================================

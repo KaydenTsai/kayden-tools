@@ -2,21 +2,6 @@ import {HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel} from 
 import {signalRLogger} from "@/shared/lib/logger";
 
 /**
- * 本地操作介面 (僅供本地狀態套用時參考型別)
- */
-export interface Operation {
-    id: string;
-    billId: string;
-    version: number;
-    opType: string;
-    targetId?: string;
-    payload: any;
-    createdByUserId?: string;
-    clientId: string;
-    createdAt: string;
-}
-
-/**
  * 伺服器更新通知訊息
  */
 export interface BillUpdatedMessage {
