@@ -24,6 +24,9 @@ export function BillListView() {
     const {user} = useAuthStore();
     const {toast} = useToast();
 
+    // 過濾已軟刪除的帳單
+    const visibleBills = bills.filter(b => !b.isDeleted);
+
     const [newOpen, setNewOpen] = useState(false);
     const [newName, setNewName] = useState('');
     const [cloudDeleteOpen, setCloudDeleteOpen] = useState(false);
@@ -89,7 +92,7 @@ export function BillListView() {
     };
 
     // 空狀態
-    if (bills.length === 0) {
+    if (visibleBills.length === 0) {
         return (
             <div className="p-6">
                 <div className="flex flex-col items-center justify-center py-12 px-6 bg-card rounded-xl border">
@@ -130,7 +133,7 @@ export function BillListView() {
 
             {/* 帳單列表 */}
             <div className="grid gap-3 sm:grid-cols-2">
-                {bills.map(bill => (
+                {visibleBills.map(bill => (
                     <Card
                         key={bill.id}
                         className="cursor-pointer hover:border-primary hover:shadow-elevated hover:-translate-y-1 active:translate-y-0 active:scale-[0.99]"

@@ -483,8 +483,8 @@ export const useSnapSplitStore = create<SnapSplitState>()(
                 );
 
                 if (hasOtherClaimedMembers) {
-                    // 協作帳單 → 只離開，不刪除雲端
-                    get().deleteBill(id);
+                    // 協作帳單 → 軟刪除，等 autoSync 同步 DELETE 後再硬刪除
+                    get().softDeleteBill(id);
                     return {action: 'left'};
                 }
 
@@ -496,21 +496,27 @@ export const useSnapSplitStore = create<SnapSplitState>()(
                 const {bills} = get();
                 const bill = bills.find(b => b.id === id);
                 if (!bill?.remoteId) {
-                    get().deleteBill(id);
+                    get().deleteBill(id);  // 純本地帳單，直接硬刪
                     return;
                 }
 
                 if (deleteFromCloud) {
+                    // 先軟刪除（標記 syncStatus: 'modified'）
+                    get().softDeleteBill(id);
+
                     try {
                         await deleteBillApi(bill.remoteId);
                         syncLogger.info('Bill deleted from cloud:', bill.remoteId);
+                        // API 成功 → 硬刪除本地資料
+                        get().deleteBill(id);
                     } catch (error) {
                         syncLogger.error('Failed to delete from cloud:', error);
-                        throw error;
+                        // API 失敗 → 保留軟刪除狀態，等 autoSync 重試
                     }
+                } else {
+                    // 使用者選擇不刪除雲端 → 只刪除本地
+                    get().deleteBill(id);
                 }
-
-                get().deleteBill(id);
             },
 
             updateBillName: (id, name) => {
@@ -702,5 +708,6 @@ export const useSnapSplitStore = create<SnapSplitState>()(
 
 export const useCurrentBill = () => {
     const {bills, currentBillId} = useSnapSplitStore();
-    return bills.find(bill => bill.id === currentBillId) ?? null;
+    const bill = bills.find(bill => bill.id === currentBillId) ?? null;
+    return bill?.isDeleted ? null : bill;
 };

@@ -12,6 +12,7 @@ import { useSnapSplitStore, useCurrentBill } from '../stores/snapSplitStore';
 import { useBillSync } from './useBillSync';
 import { useNetworkStatus } from './useNetworkStatus';
 import { useAuthStore } from '@/stores/authStore';
+import { deleteBill as deleteBillApi } from '@/api/endpoints/bills/bills';
 import type { Bill } from '../types/snap-split';
 
 /** 自動同步配置 */
@@ -218,6 +219,17 @@ export function useAutoSync(config: AutoSyncConfig = {}) {
         setState(prev => ({ ...prev, isAutoSyncing: true }));
 
         for (const bill of unsyncedBills) {
+            // 軟刪除的帳單 → 呼叫 DELETE API → 成功後硬刪除
+            if (bill.isDeleted && bill.remoteId && bill.syncStatus === 'modified') {
+                try {
+                    await deleteBillApi(bill.remoteId);
+                    useSnapSplitStore.getState().deleteBill(bill.id);
+                } catch {
+                    // 下次恢復再重試
+                }
+                continue;
+            }
+
             // 同步已有 remoteId 且狀態為 modified 的帳單
             // 或有內容的新帳單（狀態為 local）
             // 注意：error 狀態的帳單不自動重試
@@ -237,6 +249,29 @@ export function useAutoSync(config: AutoSyncConfig = {}) {
     useNetworkStatus({
         onOnline: handleNetworkRestore,
     });
+
+    /**
+     * 啟動時處理殘留的軟刪除帳單
+     */
+    useEffect(() => {
+        if (!enabled || !isAuthenticated) return;
+
+        const processDeletedBills = async () => {
+            const bills = useSnapSplitStore.getState().bills;
+            const deletedBills = bills.filter(b => b.isDeleted && b.remoteId && b.syncStatus === 'modified');
+
+            for (const bill of deletedBills) {
+                try {
+                    await deleteBillApi(bill.remoteId!);
+                    useSnapSplitStore.getState().deleteBill(bill.id);
+                } catch {
+                    // 靜默失敗，等網路恢復再重試
+                }
+            }
+        };
+
+        processDeletedBills();
+    }, [enabled, isAuthenticated]);
 
     /**
      * 更新待同步數量
