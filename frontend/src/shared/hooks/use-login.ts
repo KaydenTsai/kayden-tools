@@ -65,9 +65,9 @@ export function useLogin() {
             }
 
             // 記錄當前路徑，登入完成後導回
-            const currentHash = window.location.hash.replace(/^#/, '') || '/';
-            sessionStorage.setItem(RETURN_URL_KEY, currentHash);
-            loginLogger.debug('Saved return URL:', currentHash);
+            const currentPath = window.location.pathname + window.location.search;
+            sessionStorage.setItem(RETURN_URL_KEY, currentPath);
+            loginLogger.debug('Saved return URL:', currentPath);
 
             // 同頁跳轉到 OAuth provider
             window.location.href = authUrl;

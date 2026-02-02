@@ -34,7 +34,7 @@ export function ShareDialog({billId, open, onClose, isAuthenticated = false}: Sh
     if (!bill) return null;
 
     const shareUrl = bill.shareCode
-        ? `${window.location.origin}${window.location.pathname}#/snap-split/share/${bill.shareCode}`
+        ? `${window.location.origin}/snap-split/share/${bill.shareCode}`
         : null;
 
     // 自動同步：已登入且帳單尚未同步時

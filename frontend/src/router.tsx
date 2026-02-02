@@ -1,4 +1,4 @@
-import {createHashRouter} from 'react-router-dom';
+import {createBrowserRouter} from 'react-router-dom';
 import {MainLayout} from '@/shared/components/layout/MainLayout';
 import {HomePage} from '@/tools/home/HomePage';
 import {SnapSplitPage} from '@/features/snap-split/pages/SnapSplitPage';
@@ -13,7 +13,7 @@ const PlaceholderPage = ({name}: { name: string }) => (
     </div>
 );
 
-export const router = createHashRouter([
+export const router = createBrowserRouter([
     {
         path: '/',
         element: <MainLayout/>,
